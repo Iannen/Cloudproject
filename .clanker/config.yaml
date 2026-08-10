@@ -1,0 +1,108 @@
+kb_def:
+  render:
+    name: ui
+    template: ui_template
+    resolvers:
+    - {id: ui, type: kb_info}
+  resolvers:
+  - id: base_fragments
+    type: multi-document-retrieval
+    files: [general-rules.md]
+  rows:
+    domain_row:
+      primary: '1234567890'
+      secondary: '!"#¤%&/()='
+    prompt_row:
+      primary: qwer
+      secondary: QWER
+    action_row:
+      primary: asdf
+      secondary: ASDF
+
+domains:
+- name: bootstrap
+  plan: {name: bootstrap_plan}
+  resolvers:
+  - {id: domain_fragments, type: multi-document-retrieval, files: [
+        domain-bootstrap.md]}
+  renders:
+  - name: bootstrap
+    template: prompt_template
+    resolvers:
+    - {id: repo_content, type: repo_content, includes: [bootstrap], excludes: [.clanker, 
+          .git], sorting: normal}
+
+- name: controller
+  plan: {name: controller_plan}
+  resolvers:
+  - {id: domain_fragments, type: multi-document-retrieval, files: [
+        domain-bootstrap.md]}
+  renders:
+  - name: controller
+    template: prompt_template
+    resolvers:
+    - {id: repo_content, type: repo_content, includes: [controller], excludes: [.clanker, 
+          .git, controller/compile-and-push.sh, controller/Dockerfile], sorting: normal}
+
+- name: go-controller
+  plan: {name: go_controller_plan}
+  resolvers:
+  - {id: domain_fragments, type: multi-document-retrieval, files: [
+        domain-bootstrap.md]}
+  renders:
+  - name: src
+    template: prompt_template
+    resolvers:
+      - id: repo_content
+        type: repo_content
+        includes: 
+          - go-controller/src
+        excludes: 
+          - .clanker
+          - .git
+          - go-controller/src/z1.refactor.instructions.specific
+          - go-controller/src/z2.refactor.instructions.general
+        sorting: normal
+
+  - name: src-bak
+    template: prompt_template
+    resolvers:
+      - id: repo_content
+        type: repo_content
+        includes: 
+          - go-controller/src.bak
+        excludes: 
+          - .clanker
+          - .git
+          - go-controller/src.bak/z1.refactor.instructions.specific
+          - go-controller/src.bak/z2.refactor.instructions.general
+        sorting: normal
+
+  - name: bak-src
+    template: prompt_template
+    resolvers:
+      - id: repo_content
+        type: repo_content
+        includes: 
+          - go-controller/bak.src
+        excludes: 
+          - .clanker
+          - .git
+          - go-controller/bak.src/z1.refactor.instructions.specific
+          - go-controller/bak.src/z2.refactor.instructions.general
+        sorting: normal
+
+  - name: bakkosaur
+    template: prompt_template
+    resolvers:
+      - id: repo_content
+        type: repo_content
+        includes: 
+          - go-controller/src.bakkosaur
+        excludes: 
+          - .clanker
+          - .git
+          - go-controller/src.bakkosaur/z1.refactor.instructions.specific
+          - go-controller/src.bakkosaur/z2.refactor.instructions.general
+        sorting: normal
+

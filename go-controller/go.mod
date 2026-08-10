@@ -2,10 +2,7 @@ module cloud-controller
 
 go 1.25.0
 
-require (
-	github.com/google/uuid v1.6.0
-	go.etcd.io/etcd/client/v3 v3.5.23
-)
+require go.etcd.io/etcd/client/v3 v3.5.23
 
 require (
 	github.com/coreos/go-semver v0.3.0 // indirect
