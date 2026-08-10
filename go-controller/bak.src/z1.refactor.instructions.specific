@@ -1,0 +1,61 @@
+Introduce a refactor to complete the first end-to-end assignment publishing pipeline while keeping runtime behavior stable except for activation of the leader role via existing watcher/reconcile logic resulting from a user request to endpoint GET /make-leader.
+
+1. Introduce Global Configuration Package
+* Create a new config package under src/config.
+* It must contain a single globally accessible NodeID value.
+* NodeID must be initialized exactly once from os.Getenv("NODE_ID") in main().
+* After initialization, NodeID must be read-only and accessed across the application via a getter function config.NodeID().
+* This package must have no internal dependencies to prevent circular imports.
+
+2. Update Assignment Model
+* Modify src/models/models.go to update the Assignment struct. It must include fields matching the following structural needs:
+  * NodeID (string, JSON tag "node_id")
+  * ID (string, JSON tag "id")
+  * Role (string, JSON tag "role")
+  * Config (json.RawMessage, JSON tag "config")
+
+3. Refactor Network Abstractions
+* Replace the existing NodeController abstraction in src/infra/server.go.
+* Remove the CampaignForLeadership method entirely from all interfaces and implementations.
+* Introduce a new interface named AssignmentCreator with a single method:
+  CreateAssignment(ctx context.Context, assignment models.Assignment) error
+* The HTTP server must depend exclusively on AssignmentCreator.
+
+4. Update the HTTP Handler
+* Update the /make-leader handler in src/infra/server.go to explicitly enforce an HTTP GET request.
+* The handler must construct a models.Assignment object containing:
+  * NodeID set to config.NodeID()
+  * ID set to the string "initial"
+  * Role set to the string "leader"
+  * Config left as an empty JSON object
+* The handler must call CreateAssignment with this object.
+* The handler must respond immediately with HTTP 200 and log an entry indicating a leader assignment request was submitted.
+
+5. Implement Persistence Layer
+* Modify src/adapters/etcd-store.go to implement the AssignmentCreator interface on Store.
+* Implement CreateAssignment(ctx, assignment) error to perform an etcd transaction:
+  1. Serialize and store the full assignment struct as JSON under: assignments/definitions/<assignment.ID>
+  2. Store the assignment ID in a JSON array under: assignments/nodes/<assignment.NodeID>. IDs are added to the array by reading it, adding to it and then writing the new array to the Store.
+* The node assignment list must be overwritten with a single-element array containing only the new assignment ID.
+* Ensure proper error handling and return wrapped errors if etcd operations fail.
+
+6. Refactor Runtime Execution Engine & Registry Signatures
+* Modify src/roles/registry.go to update the RoleFunc definition. Every registered role function must now accept the complete assignment struct:
+  type RoleFunc func(ctx context.Context, asg *models.Assignment) error
+* Update src/roles/runtime.go so that the execution pipeline passes r.Definition directly into the registry logic handler: entry.Logic(ctx, r.Definition).
+* Modify src/roles/leader.go to match this signature. Inside RunLeaderRole, log an activation message using fields parsed directly from the passed assignment parameter: Node <asg.NodeID> is now acting as cluster leader for assignment <asg.ID>.
+* The leader role remains passive after initialization and does not call etcd or AssignmentCreator.
+
+7. Wire Application Baseline
+* Modify src/main.go to initialize the global config package exactly once at startup from os.Getenv("NODE_ID").
+* Immediately following initialization, src/main.go must become a regular consumer of config.NodeID() like all other application packages. Remove localized nodeID string tracking variables.
+* Pass config.NodeID() where needed to wire the new interface into the HTTP server constructor, initialization routines, and engine components.
+* The existing watcher/reconciliation pipeline logic must remain structurally unchanged. It must continue to watch assignments/nodes/<nodeID>, fetch definitions via etcd, map them to functions using the registry, and start AssignmentRuntime.
+
+8. Verification Pipeline
+Ensure that after the refactor, execution flows cleanly along this end-to-end pipeline:
+1. GET /make-leader triggers assignment creation.
+2. etcd stores assignment definition and node mapping.
+3. Watcher in main.go detects the state mutation.
+4. Reconciler matches definitions and starts the runtime.
+5. Leader role logs its activation message dynamically using the parameters passed to it by the registry runner.

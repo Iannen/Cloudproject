@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+
+import base64
+import json
+import os
+import socket
+import time
+import urllib.request
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from threading import Thread
+
+ETCD = os.environ["ETCD_ENDPOINTS"]
+HOSTNAME = socket.gethostname()
+LISTEN_PORT = int(os.environ.get("CONTROLLER_PORT", "8080"))
+
+KEY = "bootstrap/message"
+
+
+def encode(s: str) -> str:
+    return base64.b64encode(s.encode()).decode()
+
+
+def decode(s: str) -> str:
+    return base64.b64decode(s).decode()
+
+
+def put(key: str, value: str):
+    payload = json.dumps({
+        "key": encode(key),
+        "value": encode(value),
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{ETCD}/v3/kv/put",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    urllib.request.urlopen(req).read()
+
+
+def get(key: str):
+    payload = json.dumps({
+        "key": encode(key),
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{ETCD}/v3/kv/range",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        response = urllib.request.urlopen(req).read()
+        data = json.loads(response)
+        if "kvs" not in data:
+            return None
+        return decode(data["kvs"][0]["value"])
+    except Exception:
+        return None
+
+
+def add_etcd_member(peer_ip: str):
+    """
+    Calls etcd HTTP API to add a new member node by its IP.
+    Returns the raw members list.
+    """
+    target_peer_url = f"http://{peer_ip}:2380"
+    payload = json.dumps({
+        "peerURLs": [target_peer_url]
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{ETCD}/v3/cluster/member/add",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    
+    response = urllib.request.urlopen(req).read()
+    data = json.loads(response)
+    
+    return {
+        "status": "success",
+        "members": data.get("members", [])
+    }
+
+
+class JoinHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        if self.path == "/join":
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            try:
+                req_data = json.loads(post_data.decode('utf-8'))
+                node_ip = req_data["ip"]
+                
+                print(f"Received join request from IP: {node_ip}")
+                
+                result = add_etcd_member(node_ip)
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode('utf-8'))
+                
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, format, *args):
+        return
+
+
+def start_http_server():
+    server = HTTPServer(('0.0.0.0', LISTEN_PORT), JoinHandler)
+    print(f"HTTP Join Server listening on port {LISTEN_PORT}...")
+    server.serve_forever()
+
+
+print("========================================")
+print("Controller starting")
+print(f"Hostname: {HOSTNAME}")
+print(f"ETCD_ENDPOINTS: {ETCD}")
+print("========================================")
+
+while True:
+    try:
+        get(KEY)
+        break
+    except Exception as e:
+        print(f"Waiting for etcd... {e}")
+        time.sleep(2)
+
+value = get(KEY)
+if value is None:
+    value = f"hello world from {HOSTNAME}"
+    put(KEY, value)
+    print(f"Created bootstrap value: {value}")
+else:
+    print(f"Found bootstrap value: {value}")
+
+server_thread = Thread(target=start_http_server, daemon=True)
+server_thread.start()
+
+while True:
+    try:
+        value = get(KEY)
+        if value is None:
+            print(f"[{HOSTNAME}] bootstrap/message missing")
+        else:
+            print(f"[{HOSTNAME}] {value}")
+    except Exception as e:
+        print(f"[{HOSTNAME}] etcd error: {e}")
+
+    time.sleep(5)

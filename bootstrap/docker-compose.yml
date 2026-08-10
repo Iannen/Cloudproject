@@ -1,0 +1,52 @@
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.23
+    container_name: etcd
+    restart: unless-stopped
+
+    environment:
+      ETCD_NAME: ${NODE_ID}
+      ETCD_DATA_DIR: /etcd-data
+
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://${TAILSCALE_IP}:2379
+
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://${TAILSCALE_IP}:2380
+
+      ETCD_INITIAL_CLUSTER: ${ETCD_INITIAL_CLUSTER}
+      ETCD_INITIAL_CLUSTER_STATE: ${ETCD_INITIAL_CLUSTER_STATE}
+
+    volumes:
+      - etcd-data:/etcd-data
+
+    network_mode: host
+
+  controller:
+    image: kaffannen/cloud-controller:latest
+    container_name: controller
+    restart: unless-stopped
+
+    environment:
+      NODE_ID: ${NODE_ID}
+      ETCD_ENDPOINTS: http://${TAILSCALE_IP}:2379
+      CONTROLLER_PORT: 8080
+      HOME: /root
+
+    network_mode: host
+
+    volumes:
+      # Allows tailscale status to work
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
+      
+      # Allows docker commands to manipulate host infrastructure
+      - /var/run/docker.sock:/var/run/docker.sock
+      
+      # Maps the host orchestration dir so Python can rewrite host-side configurations
+      - /root/bootstrap:/root/bootstrap
+
+    depends_on:
+      - etcd
+
+volumes:
+  etcd-data:
