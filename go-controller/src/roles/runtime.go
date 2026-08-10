@@ -8,7 +8,6 @@ import (
 	"cloud-controller/src/models"
 )
 
-// AssignmentRuntime handles the life cycle of a single running assignment.
 type AssignmentRuntime struct {
 	AssignmentID string
 	Definition   *models.Assignment

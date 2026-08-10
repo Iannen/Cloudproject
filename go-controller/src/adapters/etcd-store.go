@@ -49,7 +49,6 @@ func NewStore(cli *clientv3.Client) *Store {
 	return &Store{cli: cli}
 }
 
-// CreateAssignment satisfies the infra.AssignmentCreator interface.
 func (s *Store) CreateAssignment(ctx context.Context, assignment models.Assignment) error {
 	asgJSON, err := json.Marshal(assignment)
 	if err != nil {

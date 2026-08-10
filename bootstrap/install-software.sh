@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=================================================="
 echo "System update"
-echo "=================================================="
 
 apt-get update
 apt-get -y upgrade
 
-echo "=================================================="
 echo "Base dependencies"
-echo "=================================================="
 
 apt-get install -y \
     ca-certificates \
@@ -19,9 +15,7 @@ apt-get install -y \
     lsb-release \
     jq
 
-echo "=================================================="
 echo "Docker"
-echo "=================================================="
 
 install -m 0755 -d /etc/apt/keyrings
 
@@ -47,17 +41,13 @@ apt-get install -y \
 
 systemctl enable --now docker
 
-echo "=================================================="
 echo "Tailscale"
-echo "=================================================="
 
 curl -fsSL https://tailscale.com/install.sh | sh
 
 systemctl enable tailscaled
 
-echo "=================================================="
 echo "Storage / time sync utilities"
-echo "=================================================="
 
 apt-get install -y \
     chrony \
@@ -67,9 +57,7 @@ apt-get install -y \
 
 systemctl enable --now chrony
 
-echo "=================================================="
 echo "Installed versions"
-echo "=================================================="
 
 docker --version
 tailscale version

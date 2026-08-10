@@ -13,7 +13,6 @@ type RegistryEntry struct {
 	Logic RoleFunc
 }
 
-// Registry maps role names to their executable implementations.
 var Registry = map[string]RegistryEntry{}
 
 func RegisterRole(name string, logic RoleFunc) {

@@ -10,10 +10,10 @@ import (
 	"cloud-controller/src/adapters"
 	"cloud-controller/src/config"
 	"cloud-controller/src/models"
+
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
-// MemberStore defines the required storage capabilities required by the member role.
 type MemberStore interface {
 	GetNodeAssignmentsWithRev(ctx context.Context, nodeID string) ([]string, int64, error)
 	WatchNodeAssignmentsFromRev(ctx context.Context, nodeID string, rev int64) clientv3.WatchChan
@@ -43,7 +43,6 @@ func stopAllRuntimes(runningRuntimes map[string]*AssignmentRuntime) {
 	}
 }
 
-// RunMemberRole is the permanent assignment fulfillment and control loop processing node.
 func RunMemberRole(ctx context.Context, s MemberStore) {
 	nodeID := config.NodeID()
 	log.Printf("[Member] Permanent member role started for node %s", nodeID)
@@ -90,7 +89,6 @@ func RunMemberRole(ctx context.Context, s MemberStore) {
 
 		reconcile(sessCtx, s, initialIDs, runningRuntimes, sess)
 
-		// Background watch goroutine
 		go func() {
 			currentRev := lastRevision
 			for {
@@ -153,7 +151,6 @@ func RunMemberRole(ctx context.Context, s MemberStore) {
 			}
 		}()
 
-		// Background ticker goroutine
 		go func() {
 			ticker := time.NewTicker(3 * time.Second)
 			defer ticker.Stop()
@@ -206,7 +203,6 @@ func RunMemberRole(ctx context.Context, s MemberStore) {
 	}
 }
 
-// reconcile performs sequential single-threaded updates to existing application state runtimes.
 func reconcile(
 	ctx context.Context,
 	s MemberStore,
@@ -219,7 +215,6 @@ func reconcile(
 		desiredMap[id] = true
 	}
 
-	// Stop any runtimes no longer registered
 	for id, runtime := range runningRuntimes {
 		if !desiredMap[id] {
 			log.Printf("[Reconciliation] Stopping assignment: %s", id)
@@ -228,7 +223,6 @@ func reconcile(
 		}
 	}
 
-	// Initialize new runtimes cleanly matching criteria rules
 	for _, id := range desiredIDs {
 		if _, running := runningRuntimes[id]; !running {
 			log.Printf("[Reconciliation] Discovered new assignment: %s. Fetching definition...", id)

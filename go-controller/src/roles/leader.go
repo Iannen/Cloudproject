@@ -13,7 +13,6 @@ func init() {
 	RegisterRole("leader", RunLeaderRole)
 }
 
-// RunLeaderRole executes the leader scheduler logic when assigned to a node.
 func RunLeaderRole(ctx context.Context, asg *models.Assignment, sess adapters.SessionWrapper) error {
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()

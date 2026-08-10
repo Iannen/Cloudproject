@@ -12,6 +12,7 @@ import (
 	"cloud-controller/src/config"
 	"cloud-controller/src/infra"
 	"cloud-controller/src/roles"
+
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -35,7 +36,6 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Bootstrap and run the permanent member control plane
 	go roles.RunMemberRole(ctx, s)
 
 	server := infra.NewHttpServer(s, ":8080")
@@ -48,7 +48,6 @@ func main() {
 	log.Println("[Main] Shutting down node...")
 	cancel()
 
-	// Give a small grace period for member role and runtimes to complete stopping cleanly
 	time.Sleep(500 * time.Millisecond)
 
 	_ = server.Shutdown(context.Background())

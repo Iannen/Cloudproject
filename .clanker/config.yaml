@@ -32,13 +32,13 @@ domains:
     - {id: repo_content, type: repo_content, includes: [bootstrap], excludes: [.clanker, 
           .git], sorting: normal}
 
-- name: controller
+- name: py-controller
   plan: {name: controller_plan}
   resolvers:
   - {id: domain_fragments, type: multi-document-retrieval, files: [
         domain-bootstrap.md]}
   renders:
-  - name: controller
+  - name: py-controller
     template: prompt_template
     resolvers:
     - {id: repo_content, type: repo_content, includes: [controller], excludes: [.clanker, 
@@ -57,52 +57,11 @@ domains:
         type: repo_content
         includes: 
           - go-controller/src
+          - bootstrap
+          - vms.sh
         excludes: 
           - .clanker
           - .git
-          - go-controller/src/z1.refactor.instructions.specific
-          - go-controller/src/z2.refactor.instructions.general
-        sorting: normal
-
-  - name: src-bak
-    template: prompt_template
-    resolvers:
-      - id: repo_content
-        type: repo_content
-        includes: 
-          - go-controller/src.bak
-        excludes: 
-          - .clanker
-          - .git
-          - go-controller/src.bak/z1.refactor.instructions.specific
-          - go-controller/src.bak/z2.refactor.instructions.general
-        sorting: normal
-
-  - name: bak-src
-    template: prompt_template
-    resolvers:
-      - id: repo_content
-        type: repo_content
-        includes: 
-          - go-controller/bak.src
-        excludes: 
-          - .clanker
-          - .git
-          - go-controller/bak.src/z1.refactor.instructions.specific
-          - go-controller/bak.src/z2.refactor.instructions.general
-        sorting: normal
-
-  - name: bakkosaur
-    template: prompt_template
-    resolvers:
-      - id: repo_content
-        type: repo_content
-        includes: 
-          - go-controller/src.bakkosaur
-        excludes: 
-          - .clanker
-          - .git
-          - go-controller/src.bakkosaur/z1.refactor.instructions.specific
-          - go-controller/src.bakkosaur/z2.refactor.instructions.general
+          - bootstrap/status.md
         sorting: normal
 
