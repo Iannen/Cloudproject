@@ -10,34 +10,12 @@ III. Immediate goals
 
 IV. Idea bucket:
 
-src.bak -> gemini says old news
-      "
-      Analysis of src.bak
-      What this folder represents:
+V. Known Bugs:
+      - CreateAssignment overwrites assignment array: go-controller/src/adapters/etcd-store.go replaces the node's assignment slice with a single-item array instead of performing a read-modify-write append.
 
-      src.bak is the pre-refactored snapshot of the Go controller codebase.
+      - Tailscale bootstrap race condition: join-etcd-cluster.sh may time out after 10s if Tailscale IP allocation is slow.
 
-      It includes two instruction files (z1.refactor.instructions.specific and z2.refactor.instructions.general) detailing how to refactor the legacy codebase to use etcd/client/v3/concurrency sessions and robust control loop patterns.
-
-      Relationship to src:
-
-      The active src directory from your first prompt was created by applying the refactor instructions in z1.refactor.instructions.specific to src.bak.
-
-      Key difference: In src.bak, adapters/etcd-store.go used a custom, manual KeepAliveLease implementation, and roles/member.go managed leases manually. In src, this was replaced with native concurrency.Session handling, dynamic lease IDs, and clean session teardown.
-      "
-
-bak.src -> even older:
-      "
-      What bak.src Is
-      Monolithic main.go Orchestration: Instead of roles/member.go handling the reconciliation loop and etcd watch stream (like in src and src.bak), bak.src ran the watch loop and reconciliation functions directly inside main.go.
-
-      Basic Stubs: The CampaignForLeadership method in adapters/etcd-store.go was hardcoded (_ = "magicstring"), and roles/member.go was stripped down to a basic node heartbeat background loop.
-
-      Granular Heartbeats: Every AssignmentRuntime spun up its own isolated background goroutine calling KeepAliveLease on etcd.
-      "
-
-
-V. Known Bugs
+      - Unauthenticated etcd port exposure: docker-compose.yml binds etcd to 0.0.0.0:2379.
 
 HISTORY STASH (insert below)
 

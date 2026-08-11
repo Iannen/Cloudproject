@@ -56,9 +56,9 @@ domains:
       - id: repo_content
         type: repo_content
         includes: 
-          - go-controller/src
           - bootstrap
-          - vms.sh
+          - go-controller/src
+          - pm-harness
         excludes: 
           - .clanker
           - .git
