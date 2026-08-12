@@ -2,8 +2,6 @@
 set -euo pipefail
 
 CLOUD_NODE_PREFIX="kaffcloud"
-PROJECT_ROOT="/root/cloudproject"
-BOOTSTRAP_DIR="$PROJECT_ROOT/bootstrap"
 CACHE_DIR="/var/lib/vz/template/iso"
 STORAGE="local-zfs"
 BRIDGE="vmbr0"
