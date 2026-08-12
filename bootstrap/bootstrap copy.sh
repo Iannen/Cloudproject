@@ -26,23 +26,9 @@ if [[ "$MODE" == "template" && -z "$TS_KEY" ]]; then
     echo "Error: --template mode requires a validation key via --key <ts_key>"; exit 1
 fi
 
-echo "Fetching core infrastructure assets from GitHub..."
-RAW_BASE_URL="https://raw.githubusercontent.com/Iannen/Cloudproject/main/bootstrap"
-
-FILES=(
-    "create-env.sh"
-    "install-software.sh"
-    "join-tailscale.sh"
-    "join-etcd-cluster.sh"
-    "docker-compose.yml"
-)
-
-for file in "${FILES[@]}"; do
-    echo " -> Downloading ${file}..."
-    curl -sSL "${RAW_BASE_URL}/${file}" -o "$DIR/${file}"
-done
-
-chmod +x "$DIR"/*.sh
+echo "Fetching core infrastructure assets..."
+curl -sSL "http://192.168.50.246:8000/bootstrap.tar.gz" -o "$DIR/bootstrap.tar.gz"
+tar -xzf "$DIR/bootstrap.tar.gz" -C "$DIR"
 
 run() {
     echo -e "\nExecuting: $1 ($MODE mode)"
