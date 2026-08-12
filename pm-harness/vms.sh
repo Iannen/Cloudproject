@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+CLOUD_NODE_PREFIX="kaffcloud"
 PROJECT_ROOT="/root/cloudproject"
 BOOTSTRAP_DIR="$PROJECT_ROOT/bootstrap"
 CACHE_DIR="/var/lib/vz/template/iso"
@@ -131,7 +132,7 @@ create_template() {
     local cores="${2:-$TEMPLATE_CORES}" memory="${3:-$TEMPLATE_MEMORY}" disk="${4:-$TEMPLATE_DISK}"
 
     local vmid; vmid=$(next_template_vmid)
-    local full_name="${template_name}-${vmid}"
+    local full_name="${template_name}-${vmid}" 
     local tmp_img="/tmp/cloud_${vmid}.img"
     local snippet="/var/lib/vz/snippets/user-data-${vmid}.yml"
 
@@ -157,10 +158,13 @@ fqdn: ${full_name}.local
 runcmd:
   - |
     exec > /var/log/cloud-init-bootstrap.log 2>&1
-    echo "[+] Waiting for network..."
+    echo "[+] Waiting for network connection..."
     until ping -c 1 8.8.8.8; do sleep 2; done
-    echo "[+] Testing curl..."
-    curl -sSL https://ipinfo.io/ip || true
+    
+    echo "[+] Executing Remote Bootstrap Script..."
+    curl -sSL "https://raw.githubusercontent.com/Iannen/Cloudproject/refs/heads/main/bootstrap/bootstrap.sh" | bash -s -- --template --key "${TAILSCALE_AUTH_KEY}"
+    
+    echo "[+] Bootstrap completed successfully. Shutting down..."
     systemctl poweroff
 EOF
 
@@ -179,8 +183,8 @@ EOF
     echo "[+] Waiting for VM $vmid to execute Cloud-Init and shut down..."
     while qm status "$vmid" | grep -q running; do sleep 3; done
 
-    #qm template "$vmid"
-    #rm -f "$snippet"
+    qm template "$vmid"
+    rm -f "$snippet"
     echo "[+] Template blueprint created successfully: $vmid"
 }
 
@@ -190,7 +194,7 @@ create_vm() {
 
     local cores="${3:-$VM_CORES}" memory="${4:-$VM_MEMORY}" disk="${5:-$VM_DISK}"
     local next_id; next_id=$(next_vmid)
-    local full_vm_name="${base_name}-${next_id}"
+    local full_vm_name="${CLOUD_NODE_PREFIX}-${base_name}-${next_id}"
     local snippet="/var/lib/vz/snippets/user-data-${next_id}.yml"
 
     echo "[+] Provisioning VM $next_id ($full_vm_name) from template $template_id..."
@@ -200,6 +204,7 @@ create_vm() {
 
     mkdir -p /var/lib/vz/snippets
     cat <<EOF > "$snippet"
+#cloud-config
 user: $DEFAULT_USER
 password: $DEFAULT_PASS
 chpasswd: { expire: False }
