@@ -60,13 +60,11 @@ func (s *Store) CreateAssignment(ctx context.Context, assignment models.Assignme
 	defKey := AssignmentDefinitionPath(assignment.ID)
 	nodeKey := NodeAssignmentsPath(assignment.NodeID)
 
-	// Fetch existing assignments for the node
 	existingIDs, _, err := s.GetNodeAssignmentsWithRev(ctx, assignment.NodeID)
 	if err != nil {
 		return fmt.Errorf("failed to get existing node assignments: %w", err)
 	}
 
-	// Append assignment ID if not already present
 	alreadyExists := false
 	for _, id := range existingIDs {
 		if id == assignment.ID {
@@ -149,13 +147,10 @@ func (s *Store) GetNodeAssignmentsWithRev(ctx context.Context, nodeID string) ([
 func (s *Store) TryClaimLeadership(ctx context.Context, sess SessionWrapper, nodeID string) (bool, error) {
 	leaderKey := config.ClusterLeaderKey
 
-	// Condition: Key does NOT exist in etcd yet
 	cond := clientv3.Compare(clientv3.CreateRevision(leaderKey), "=", 0)
 
-	// Put our nodeID on the leader key with our heartbeat lease
 	thenOp := clientv3.OpPut(leaderKey, nodeID, clientv3.WithLease(clientv3.LeaseID(sess.LeaseID())))
 
-	// If key exists, read current leader info
 	elseOp := clientv3.OpGet(leaderKey)
 
 	txnResp, err := s.cli.Txn(ctx).If(cond).Then(thenOp).Else(elseOp).Commit()

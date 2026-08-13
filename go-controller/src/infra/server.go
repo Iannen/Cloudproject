@@ -49,7 +49,6 @@ func (s *HttpServer) handleInitialize(w http.ResponseWriter, r *http.Request) {
 	nodeID := config.NodeID()
 	log.Printf("[HTTP] Received /initialize request for node %s", nodeID)
 
-	// Quick check: see if the etcd container already exists
 	checkCmd := exec.CommandContext(r.Context(), "docker", "compose", "ps", "-q", "etcd")
 	checkCmd.Dir = "/root/bootstrap"
 	out, err := checkCmd.Output()
@@ -165,7 +164,6 @@ func (s *HttpServer) handleAssimilate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Purge existing data and boot etcd as Learner
 	downCmd := exec.CommandContext(r.Context(), "docker", "compose", "down", "etcd", "--volumes", "--remove-orphans")
 	downCmd.Dir = bootstrapDir
 	_ = downCmd.Run()
@@ -177,7 +175,6 @@ func (s *HttpServer) handleAssimilate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Simple TCP check to verify container is listening on port 2379
 	var ready bool
 	for i := 0; i < 15; i++ {
 		conn, err := net.DialTimeout("tcp", "127.0.0.1:2379", 1*time.Second)
@@ -219,7 +216,6 @@ func (s *HttpServer) handleActivate(w http.ResponseWriter, r *http.Request) {
 
 	s.store = adapters.NewStore(cli)
 
-	// Launch Member Role loop in background
 	if factory, found := roles.Registry["member"]; found {
 		memberRunner := factory(s.store)
 		memberAsg := &models.Assignment{

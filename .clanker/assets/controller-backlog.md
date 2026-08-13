@@ -1,13 +1,23 @@
 I. Long term goals
 
 II. Medium term goals
-
-- [ ] Develop Recruiter Role & Tailnet Discovery
-      Once elected leader, assign the node the Recruiter role to discover dormant Tailnet peers and invoke /assimilate to add them as etcd learners.
-
-- [ ] Implement /assimilate Endpoint
-      Add handler to join incoming dormant nodes to the cluster as etcd learners and initialize their local roles.
-
+    - [ ] Configuration and Path Centralization
+        - Consolidate duplicate etcd key path helpers into config/config.go and remove redundant helper definitions from adapters/etcd-store.go
+        - Move hardcoded key prefix strings (e.g., "heartbeats/nodes/", "assignments/definitions/") into config constants
+        - Move operational timeouts, ticker intervals, and retry durations across roles/infra into central config constants
+        - Centralize default host directory paths, etcd/HTTP ports, and node naming prefix filters ("kaffcloud")
+    - [ ] Store Interface Consolidation
+        - Unify single-purpose store interfaces (LeaderStore, MemberStore, TsManagerStore) into a single ClusterStore interface
+        - Simplify factory function signatures and remove redundant interface assertions across role implementations
+    - [ ] Streamline Member Reconciliation Loop
+        - Extract event listening and ticker creation logic from MemberRole.Run into dedicated helper functions
+        - Refactor watch channel reconnect logic to use context-cancelled loops, eliminating goto statements
+    - [ ] HTTP and Container Helper Refactoring
+        - Extract a shared connectEtcdClient helper to remove repetitive gRPC connection retries in infra/server.go
+        - Extract a runDockerCompose utility function to standardize Docker command execution across HTTP handlers
+    - [ ] Assimilation Workflow Simplification
+        - Extract a generic postJSON helper function to handle boilerplate HTTP calls in roles/ts-manager.go
+        - Refactor assimilateNode into sequential, single-responsibility helper functions
 
 III. Immediate Goals
 
@@ -45,3 +55,11 @@ VI: Resolved lostcancel Context Leak Warnings
 
 VII: Implemented Idempotent /initialize Handler
     - Added Docker container existence checks (docker compose ps -q etcd) inside handleInitialize to safely exit early with 200 OK if etcd is already running on the host.
+
+VIII: Developed Tailscale Manager Role & Peer Discovery
+    - Implemented Tailscale status parsing to discover dormant nodes on the tailnet.
+    - Added learner registration logic to add discovered candidate nodes to etcd before invoking assimilation.
+
+IX: Implemented /assimilate & /activate Endpoints and Handlers
+    - Created two-phase /assimilate and /activate endpoints on HttpServer to prevent gRPC learner errors.
+    - Configured handlers to update local .env, purge stale etcd volumes, launch etcd in learner mode, and start gRPC member roles post-promotion.

@@ -23,7 +23,6 @@ type LeaderRole struct {
 
 func init() {
 	RegisterRole("leader", func(store any) RoleRunner {
-		// Go type-asserts store to LeaderStore interface here at instantiation time!
 		ls, ok := store.(LeaderStore)
 		if !ok {
 			panic("store passed to leader factory does not implement LeaderStore")
@@ -64,7 +63,6 @@ func reconcileCluster(ctx context.Context, store LeaderStore) {
 
 	activeAssignmentsByRole := make(map[string][]models.Assignment)
 	for _, asg := range existingAssignments {
-		// Only count assignments belonging to currently healthy nodes
 		if isNodeActive(asg.NodeID, activeNodes) {
 			activeAssignmentsByRole[asg.Role] = append(activeAssignmentsByRole[asg.Role], asg)
 		}
