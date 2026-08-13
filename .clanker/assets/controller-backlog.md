@@ -5,33 +5,30 @@ II. Medium term goals
 
 II. Medium-Term Goals
 
-- Init Process Refactor
-        Implement Passive / Dormant Node State
+- [ ] Implement Passive/Dormant Node State
+      Default node boot loop to dormant mode; run health heartbeats without starting workload schedulers or entering elections.
 
-        Update node bootstrap logic to default to a dormant state on launch, maintaining basic health heartbeats without attempting role elections or workload execution.
+- [ ] Add Global Cluster State & /init-cloud Endpoint
+      Replace /make-leader with /init-cloud to launch local etcd (if not running) and write cluster/state = "initialized" into KV store.
 
-        Add Global Cluster State & /init-cloud Endpoint
+- [ ] Implement Election Campaigns for Leader Races
+      Trigger dormant nodes to go active when cluster/state == "initialized". Use go.etcd.io/etcd/client/v3/concurrency routines for leader election and failover.
 
-        Replace /make-leader with an /init-cloud HTTP endpoint on the API server.
+- [ ] Develop Recruiter Role & Tailnet Discovery
+      Once elected leader, assign the node the Recruiter role to discover dormant Tailnet peers and invoke /assimilate to add them as etcd learners.
 
-        Update /init-cloud to write a global cluster/state = "initialized" key into etcd to trigger cluster initialization.
 
-        Implement etcd Election Campaign for Leader Race
+III. Immediate Goals
 
-        Transition member loops from dormant to active upon detecting cluster/state = "initialized".
+- [ ] 1. Decouple Container Dependencies in Compose
+      Update docker-compose.yml so controller no longer depends on etcd, and set etcd restart policy to "no" so it stays dormant on boot.
 
-        Integrate go.etcd.io/etcd/client/v3/concurrency election routines so active members race for leadership automatically during bootstrap and failover.
+- [ ] 2. Refactor Bootstrap Script
+      Modify join-etcd-cluster.sh to only spin up the controller container during initial host boot.
 
-        Develop Recruiter Role & Tailnet Node Discovery
+- [ ] 3. Defer gRPC Client & Store Initialization
+      Remove top-level clientv3 / adapters.Store setup from main.go DI. Move etcd lifecycle control and client instantiation into HTTP runtime operations (/init-cloud & /assimilate).
 
-        Create a new recruiter role function registered in the role registry.
-
-        Logic: Once a node wins leadership, assign itself the recruiter role to discover dormant nodes on the Tailnet and recruit them into the active cluster assignment pool.
-
-III. Immediate goals
-      - Explore the nature of the current repository. 
-      - Is it new? Then bootstrap a new project
-      - Does it have content? Then analyze with user
 
 IV. Idea bucket:
 
