@@ -1,23 +1,20 @@
 package roles
 
 import (
+	"context"
+
 	"cloud-controller/src/adapters"
 	"cloud-controller/src/models"
-	"context"
 )
 
-type RoleFunc func(ctx context.Context, asg *models.Assignment, sess adapters.SessionWrapper) error
-
-type RegistryEntry struct {
-	Name  string
-	Logic RoleFunc
+type RoleRunner interface {
+	Run(ctx context.Context, asg *models.Assignment, sess adapters.SessionWrapper) error
 }
 
-var Registry = map[string]RegistryEntry{}
+type RoleFactory func(store any) RoleRunner
 
-func RegisterRole(name string, logic RoleFunc) {
-	Registry[name] = RegistryEntry{
-		Name:  name,
-		Logic: logic,
-	}
+var Registry = map[string]RoleFactory{}
+
+func RegisterRole(name string, factory RoleFactory) {
+	Registry[name] = factory
 }

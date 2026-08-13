@@ -20,6 +20,8 @@ type MemberStore interface {
 	GetAssignmentDefinition(ctx context.Context, assignmentID string) (*models.Assignment, error)
 	NewSession(ctx context.Context, ttl int64) (adapters.SessionWrapper, error)
 	PutWithSession(ctx context.Context, sess adapters.SessionWrapper, key string, value string) error
+	TryClaimLeadership(ctx context.Context, sess adapters.SessionWrapper, nodeID string) (bool, error)
+	WatchLeaderKey(ctx context.Context, notifyChan chan<- struct{})
 }
 
 type EventType int
@@ -35,6 +37,20 @@ type ReconcileEvent struct {
 	HasWatchIDs bool
 }
 
+type MemberRole struct {
+	store MemberStore
+}
+
+func init() {
+	RegisterRole("member", func(store any) RoleRunner {
+		ms, ok := store.(MemberStore)
+		if !ok {
+			panic("store passed to member factory does not implement MemberStore")
+		}
+		return &MemberRole{store: ms}
+	})
+}
+
 func stopAllRuntimes(runningRuntimes map[string]*AssignmentRuntime) {
 	for id, runtime := range runningRuntimes {
 		log.Printf("[Member] Stopping active runtime %s during session transition/teardown", id)
@@ -43,7 +59,7 @@ func stopAllRuntimes(runningRuntimes map[string]*AssignmentRuntime) {
 	}
 }
 
-func RunMemberRole(ctx context.Context, s MemberStore) {
+func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess adapters.SessionWrapper) error {
 	nodeID := config.NodeID()
 	log.Printf("[Member] Permanent member role started for node %s", nodeID)
 
@@ -54,32 +70,71 @@ func RunMemberRole(ctx context.Context, s MemberStore) {
 		select {
 		case <-ctx.Done():
 			stopAllRuntimes(runningRuntimes)
-			return
+			return nil
 		default:
 		}
 
-		sess, err := s.NewSession(ctx, 5)
+		sess, err := m.store.NewSession(ctx, 5)
 		if err != nil {
 			log.Printf("[Member] Failed to establish fresh session: %v. Retrying in 2 seconds...", err)
 			select {
 			case <-ctx.Done():
-				return
+				return nil
 			case <-time.After(2 * time.Second):
 				continue
 			}
 		}
 
 		sessCtx, cancelSess := context.WithCancel(ctx)
+		defer cancelSess()
 		eventChan := make(chan ReconcileEvent, 10)
 
-		if err := s.PutWithSession(sessCtx, sess, nodeHeartbeatKey, "alive"); err != nil {
+		if err := m.store.PutWithSession(sessCtx, sess, nodeHeartbeatKey, "alive"); err != nil {
 			log.Printf("[Member] Failed to register node heartbeat: %v. Resetting session...", err)
 			cancelSess()
 			_ = sess.Close()
 			continue
 		}
 
-		initialIDs, lastRevision, err := s.GetNodeAssignmentsWithRev(sessCtx, nodeID)
+		isLeader, err := m.store.TryClaimLeadership(sessCtx, sess, nodeID)
+		if err != nil {
+			log.Printf("[Member] Leader check failed: %v", err)
+		}
+
+		if isLeader {
+			log.Println("[Member] This node won leadership! Launching Leader Role...")
+			leaderAsg := &models.Assignment{
+				NodeID: nodeID,
+				ID:     "leader-" + nodeID,
+				Role:   "leader",
+			}
+
+			if factory, found := Registry["leader"]; found {
+				leaderRunner := factory(m.store)
+				go func() {
+					if err := leaderRunner.Run(sessCtx, leaderAsg, sess); err != nil && sessCtx.Err() == nil {
+						log.Printf("[Member] Leader role execution failed: %v", err)
+					}
+				}()
+			}
+		} else {
+			leaderDeletedChan := make(chan struct{}, 1)
+			go m.store.WatchLeaderKey(sessCtx, leaderDeletedChan)
+
+			go func() {
+				select {
+				case <-sessCtx.Done():
+					return
+				case <-leaderDeletedChan:
+					select {
+					case eventChan <- ReconcileEvent{Type: EventTick}:
+					default:
+					}
+				}
+			}()
+		}
+
+		initialIDs, lastRevision, err := m.store.GetNodeAssignmentsWithRev(sessCtx, nodeID)
 		if err != nil {
 			log.Printf("[Member] Error fetching initial bootstrap assignments: %v. Resetting session...", err)
 			cancelSess()
@@ -87,7 +142,7 @@ func RunMemberRole(ctx context.Context, s MemberStore) {
 			continue
 		}
 
-		reconcile(sessCtx, s, initialIDs, runningRuntimes, sess)
+		reconcile(sessCtx, m.store, initialIDs, runningRuntimes, sess)
 
 		go func() {
 			currentRev := lastRevision
@@ -96,7 +151,7 @@ func RunMemberRole(ctx context.Context, s MemberStore) {
 				case <-sessCtx.Done():
 					return
 				default:
-					watchChan := s.WatchNodeAssignmentsFromRev(sessCtx, nodeID, currentRev+1)
+					watchChan := m.store.WatchNodeAssignmentsFromRev(sessCtx, nodeID, currentRev+1)
 					log.Printf("[Member] Monitoring assignment watch stream from revision: %d", currentRev+1)
 
 					for {
@@ -175,7 +230,7 @@ func RunMemberRole(ctx context.Context, s MemberStore) {
 				cancelSess()
 				stopAllRuntimes(runningRuntimes)
 				_ = sess.Close()
-				return
+				return nil
 
 			case <-sess.Done():
 				log.Println("[Member] CRITICAL: Session lease lost! Evicting child roles...")
@@ -188,7 +243,7 @@ func RunMemberRole(ctx context.Context, s MemberStore) {
 				if evt.Type == EventWatch && evt.HasWatchIDs {
 					targetIDs = evt.WatchIDs
 				} else {
-					ids, _, err := s.GetNodeAssignmentsWithRev(sessCtx, nodeID)
+					ids, _, err := m.store.GetNodeAssignmentsWithRev(sessCtx, nodeID)
 					if err != nil {
 						log.Printf("[Member] Error updating assignment state from ticker: %v", err)
 						continue
@@ -196,7 +251,7 @@ func RunMemberRole(ctx context.Context, s MemberStore) {
 					targetIDs = ids
 				}
 
-				reconcile(sessCtx, s, targetIDs, runningRuntimes, sess)
+				reconcile(sessCtx, m.store, targetIDs, runningRuntimes, sess)
 			}
 		}
 		_ = sess.Close()
@@ -232,15 +287,17 @@ func reconcile(
 				continue
 			}
 
-			entry, found := Registry[asg.Role]
+			factory, found := Registry[asg.Role]
 			if !found {
 				log.Printf("[Reconciliation] Unknown role '%s' for assignment %s", asg.Role, id)
 				continue
 			}
 
+			runner := factory(s)
+
 			log.Printf("[Reconciliation] Starting assignment %s with role %s", id, asg.Role)
 			runtime := NewAssignmentRuntime(asg)
-			runtime.Start(ctx, entry, sess)
+			runtime.Start(ctx, runner, sess)
 			runningRuntimes[id] = runtime
 		}
 	}

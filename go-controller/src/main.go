@@ -17,22 +17,20 @@ func main() {
 	}
 	config.InitNodeID()
 	log.Printf("[Main] Starting controller node with ID: %s", config.NodeID())
-	/*
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-	*/
-	server := infra.NewHttpServer(":8080")
 
-	go server.Start()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	server := infra.NewHttpServer(ctx, ":8080")
+	server.Start()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
-	log.Println("[Main] Shutting down controller node...")
-	/*
-		cancel()
-	*/
+	log.Println("[Main] Shutting down node...")
+	cancel()
+
 	_ = server.Shutdown(context.Background())
 	log.Println("[Main] Node stopped cleanly")
 }
