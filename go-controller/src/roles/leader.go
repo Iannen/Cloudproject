@@ -21,18 +21,8 @@ type LeaderRole struct {
 	store LeaderStore
 }
 
-func init() {
-	RegisterRole("leader", func(store any) RoleRunner {
-		ls, ok := store.(LeaderStore)
-		if !ok {
-			panic("store passed to leader factory does not implement LeaderStore")
-		}
-		return &LeaderRole{store: ls}
-	})
-}
-
 func (l *LeaderRole) Run(ctx context.Context, asg *models.Assignment, sess adapters.SessionWrapper) error {
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(config.LeaderReconcileInterval)
 	defer ticker.Stop()
 
 	log.Printf("[Leader] Node %s acting as leader for %s. Lease ID: %d", asg.NodeID, asg.ID, sess.LeaseID())

@@ -1,7 +1,7 @@
 I. Long term goals
 
 II. Medium term goals
-    - [ ] Configuration and Path Centralization
+    - [x] Configuration and Path Centralization
         - Consolidate duplicate etcd key path helpers into config/config.go and remove redundant helper definitions from adapters/etcd-store.go
         - Move hardcoded key prefix strings (e.g., "heartbeats/nodes/", "assignments/definitions/") into config constants
         - Move operational timeouts, ticker intervals, and retry durations across roles/infra into central config constants
@@ -12,7 +12,7 @@ II. Medium term goals
     - [ ] Streamline Member Reconciliation Loop
         - Extract event listening and ticker creation logic from MemberRole.Run into dedicated helper functions
         - Refactor watch channel reconnect logic to use context-cancelled loops, eliminating goto statements
-    - [ ] HTTP and Container Helper Refactoring
+    - [x] HTTP and Container Helper Refactoring
         - Extract a shared connectEtcdClient helper to remove repetitive gRPC connection retries in infra/server.go
         - Extract a runDockerCompose utility function to standardize Docker command execution across HTTP handlers
     - [ ] Assimilation Workflow Simplification

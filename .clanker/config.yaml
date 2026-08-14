@@ -35,7 +35,7 @@ domains:
   plan: {name: controller_plan}
   resolvers:
   - {id: domain_fragments, type: multi-document-retrieval, files: [
-        domain-bootstrap.md, controller-backlog.md]}
+        domain-bootstrap.md]}
   renders:
   - name: go-controller
     template: prompt_template

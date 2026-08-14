@@ -13,22 +13,6 @@ import (
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
-func NodeHeartbeatPath(nodeID string) string {
-	return fmt.Sprintf("heartbeats/nodes/%s", nodeID)
-}
-
-func AssignmentHeartbeatPath(assignmentID string) string {
-	return fmt.Sprintf("heartbeats/assignments/%s", assignmentID)
-}
-
-func NodeAssignmentsPath(nodeID string) string {
-	return fmt.Sprintf("assignments/nodes/%s", nodeID)
-}
-
-func AssignmentDefinitionPath(assignmentID string) string {
-	return fmt.Sprintf("assignments/definitions/%s", assignmentID)
-}
-
 type SessionWrapper interface {
 	Done() <-chan struct{}
 	Close() error
@@ -57,8 +41,8 @@ func (s *Store) CreateAssignment(ctx context.Context, assignment models.Assignme
 		return fmt.Errorf("failed to marshal assignment definition: %w", err)
 	}
 
-	defKey := AssignmentDefinitionPath(assignment.ID)
-	nodeKey := NodeAssignmentsPath(assignment.NodeID)
+	defKey := config.AssignmentDefinitionPath(assignment.ID)
+	nodeKey := config.NodeAssignmentsPath(assignment.NodeID)
 
 	existingIDs, _, err := s.GetNodeAssignmentsWithRev(ctx, assignment.NodeID)
 	if err != nil {
@@ -107,7 +91,7 @@ func (s *Store) PutWithSession(ctx context.Context, sess SessionWrapper, key str
 }
 
 func (s *Store) GetAssignmentDefinition(ctx context.Context, assignmentID string) (*models.Assignment, error) {
-	key := AssignmentDefinitionPath(assignmentID)
+	key := config.AssignmentDefinitionPath(assignmentID)
 	resp, err := s.cli.Get(ctx, key)
 	if err != nil {
 		return nil, err
@@ -123,12 +107,12 @@ func (s *Store) GetAssignmentDefinition(ctx context.Context, assignmentID string
 }
 
 func (s *Store) WatchNodeAssignmentsFromRev(ctx context.Context, nodeID string, rev int64) clientv3.WatchChan {
-	key := NodeAssignmentsPath(nodeID)
+	key := config.NodeAssignmentsPath(nodeID)
 	return s.cli.Watch(ctx, key, clientv3.WithRev(rev))
 }
 
 func (s *Store) GetNodeAssignmentsWithRev(ctx context.Context, nodeID string) ([]string, int64, error) {
-	key := NodeAssignmentsPath(nodeID)
+	key := config.NodeAssignmentsPath(nodeID)
 	resp, err := s.cli.Get(ctx, key)
 	if err != nil {
 		return nil, 0, err
@@ -148,9 +132,7 @@ func (s *Store) TryClaimLeadership(ctx context.Context, sess SessionWrapper, nod
 	leaderKey := config.ClusterLeaderKey
 
 	cond := clientv3.Compare(clientv3.CreateRevision(leaderKey), "=", 0)
-
 	thenOp := clientv3.OpPut(leaderKey, nodeID, clientv3.WithLease(clientv3.LeaseID(sess.LeaseID())))
-
 	elseOp := clientv3.OpGet(leaderKey)
 
 	txnResp, err := s.cli.Txn(ctx).If(cond).Then(thenOp).Else(elseOp).Commit()
@@ -187,7 +169,7 @@ func (s *Store) WatchLeaderKey(ctx context.Context, notifyChan chan<- struct{}) 
 }
 
 func (s *Store) GetActiveNodeIDs(ctx context.Context) ([]string, error) {
-	resp, err := s.cli.Get(ctx, "heartbeats/nodes/", clientv3.WithPrefix())
+	resp, err := s.cli.Get(ctx, config.PrefixHeartbeatsNodes, clientv3.WithPrefix())
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +177,7 @@ func (s *Store) GetActiveNodeIDs(ctx context.Context) ([]string, error) {
 	var nodeIDs []string
 	for _, kv := range resp.Kvs {
 		key := string(kv.Key)
-		nodeID := strings.TrimPrefix(key, "heartbeats/nodes/")
+		nodeID := strings.TrimPrefix(key, config.PrefixHeartbeatsNodes)
 		if nodeID != "" {
 			nodeIDs = append(nodeIDs, nodeID)
 		}
@@ -204,7 +186,7 @@ func (s *Store) GetActiveNodeIDs(ctx context.Context) ([]string, error) {
 }
 
 func (s *Store) GetAllAssignments(ctx context.Context) ([]models.Assignment, error) {
-	resp, err := s.cli.Get(ctx, "assignments/definitions/", clientv3.WithPrefix())
+	resp, err := s.cli.Get(ctx, config.PrefixAssignmentsDefs, clientv3.WithPrefix())
 	if err != nil {
 		return nil, err
 	}

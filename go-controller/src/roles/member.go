@@ -24,6 +24,14 @@ type MemberStore interface {
 	WatchLeaderKey(ctx context.Context, notifyChan chan<- struct{})
 }
 
+func NewMemberAssignment(nodeID string) *models.Assignment {
+	return &models.Assignment{
+		NodeID: nodeID,
+		ID:     "member-" + nodeID,
+		Role:   "member",
+	}
+}
+
 type EventType int
 
 const (
@@ -38,17 +46,8 @@ type ReconcileEvent struct {
 }
 
 type MemberRole struct {
-	store MemberStore
-}
-
-func init() {
-	RegisterRole("member", func(store any) RoleRunner {
-		ms, ok := store.(MemberStore)
-		if !ok {
-			panic("store passed to member factory does not implement MemberStore")
-		}
-		return &MemberRole{store: ms}
-	})
+	store    MemberStore
+	registry *Registry
 }
 
 func stopAllRuntimes(runningRuntimes map[string]*AssignmentRuntime) {
@@ -63,7 +62,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess adapt
 	nodeID := config.NodeID()
 	log.Printf("[Member] Permanent member role started for node %s", nodeID)
 
-	nodeHeartbeatKey := "heartbeats/nodes/" + nodeID
+	nodeHeartbeatKey := config.NodeHeartbeatPath(nodeID)
 	runningRuntimes := make(map[string]*AssignmentRuntime)
 
 	for {
@@ -74,19 +73,18 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess adapt
 		default:
 		}
 
-		sess, err := m.store.NewSession(ctx, 5)
+		sess, err := m.store.NewSession(ctx, config.EtcdSessionTTLSeconds)
 		if err != nil {
 			log.Printf("[Member] Failed to establish fresh session: %v. Retrying in 2 seconds...", err)
 			select {
 			case <-ctx.Done():
 				return nil
-			case <-time.After(2 * time.Second):
-				continue
+			case <-time.After(config.MemberConnectRetryInterval):
 			}
+			continue
 		}
 
 		sessCtx, cancelSess := context.WithCancel(ctx)
-		defer cancelSess()
 		eventChan := make(chan ReconcileEvent, 10)
 
 		if err := m.store.PutWithSession(sessCtx, sess, nodeHeartbeatKey, "alive"); err != nil {
@@ -103,35 +101,18 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess adapt
 
 		if isLeader {
 			log.Println("[Member] This node won leadership! Launching Leader Role...")
+
 			leaderAsg := &models.Assignment{
 				NodeID: nodeID,
 				ID:     "leader-" + nodeID,
 				Role:   "leader",
 			}
 
-			if factory, found := Registry["leader"]; found {
-				leaderRunner := factory(m.store)
-				go func() {
-					if err := leaderRunner.Run(sessCtx, leaderAsg, sess); err != nil && sessCtx.Err() == nil {
-						log.Printf("[Member] Leader role execution failed: %v", err)
-					}
-				}()
+			if err := m.registry.Start(sessCtx, leaderAsg, sess); err != nil {
+				log.Printf("[Member] Failed to start leader role: %v", err)
 			}
 		} else {
-			leaderDeletedChan := make(chan struct{}, 1)
-			go m.store.WatchLeaderKey(sessCtx, leaderDeletedChan)
-
-			go func() {
-				select {
-				case <-sessCtx.Done():
-					return
-				case <-leaderDeletedChan:
-					select {
-					case eventChan <- ReconcileEvent{Type: EventTick}:
-					default:
-					}
-				}
-			}()
+			m.spawnLeaderWatcher(sessCtx, eventChan)
 		}
 
 		initialIDs, lastRevision, err := m.store.GetNodeAssignmentsWithRev(sessCtx, nodeID)
@@ -142,86 +123,10 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess adapt
 			continue
 		}
 
-		reconcile(sessCtx, m.store, initialIDs, runningRuntimes, sess)
+		m.reconcile(sessCtx, initialIDs, runningRuntimes, sess)
 
-		go func() {
-			currentRev := lastRevision
-			for {
-				select {
-				case <-sessCtx.Done():
-					return
-				default:
-					watchChan := m.store.WatchNodeAssignmentsFromRev(sessCtx, nodeID, currentRev+1)
-					log.Printf("[Member] Monitoring assignment watch stream from revision: %d", currentRev+1)
-
-					for {
-						select {
-						case <-sessCtx.Done():
-							return
-						case resp, ok := <-watchChan:
-							if !ok {
-								log.Printf("[Member] Assignment watch channel closed. Reconnecting...")
-								goto Reconnect
-							}
-							if resp.Canceled {
-								log.Printf("[Member] Assignment watch canceled (Error: %v). Reconnecting...", resp.Err())
-								if errors.Is(resp.Err(), context.Canceled) {
-									return
-								}
-								goto Reconnect
-							}
-
-							if resp.Header.Revision > currentRev {
-								currentRev = resp.Header.Revision
-							}
-
-							for _, ev := range resp.Events {
-								var currentIDs []string
-								if ev.Type != clientv3.EventTypeDelete {
-									if err := json.Unmarshal(ev.Kv.Value, &currentIDs); err != nil {
-										log.Printf("[Member] Error unmarshaling watched assignments: %v", err)
-										continue
-									}
-								}
-
-								evt := ReconcileEvent{
-									Type:        EventWatch,
-									WatchIDs:    currentIDs,
-									HasWatchIDs: true,
-								}
-								select {
-								case eventChan <- evt:
-								default:
-								}
-							}
-						}
-					}
-				Reconnect:
-					select {
-					case <-sessCtx.Done():
-						return
-					case <-time.After(1 * time.Second):
-					}
-				}
-			}
-		}()
-
-		go func() {
-			ticker := time.NewTicker(3 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-sessCtx.Done():
-					return
-				case <-ticker.C:
-					evt := ReconcileEvent{Type: EventTick}
-					select {
-					case eventChan <- evt:
-					default:
-					}
-				}
-			}
-		}()
+		m.spawnWatchListener(sessCtx, nodeID, lastRevision, eventChan)
+		m.spawnTickerNotifier(sessCtx, eventChan)
 
 		sessionAlive := true
 		for sessionAlive {
@@ -251,16 +156,126 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess adapt
 					targetIDs = ids
 				}
 
-				reconcile(sessCtx, m.store, targetIDs, runningRuntimes, sess)
+				m.reconcile(sessCtx, targetIDs, runningRuntimes, sess)
 			}
 		}
+
+		cancelSess()
 		_ = sess.Close()
 	}
 }
 
-func reconcile(
+func (m *MemberRole) spawnTickerNotifier(ctx context.Context, eventChan chan<- ReconcileEvent) {
+	go func() {
+		ticker := time.NewTicker(config.MemberReconcileInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				select {
+				case eventChan <- ReconcileEvent{Type: EventTick}:
+				default:
+				}
+			}
+		}
+	}()
+}
+
+func (m *MemberRole) spawnLeaderWatcher(ctx context.Context, eventChan chan<- ReconcileEvent) {
+	leaderDeletedChan := make(chan struct{}, 1)
+	go m.store.WatchLeaderKey(ctx, leaderDeletedChan)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-leaderDeletedChan:
+			select {
+			case eventChan <- ReconcileEvent{Type: EventTick}:
+			default:
+			}
+		}
+	}()
+}
+
+func (m *MemberRole) spawnWatchListener(ctx context.Context, nodeID string, startRev int64, eventChan chan<- ReconcileEvent) {
+	go func() {
+		currentRev := startRev
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			if !m.watchStreamLoop(ctx, nodeID, &currentRev, eventChan) {
+				return
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(config.MemberWatchReconnectDelay):
+			}
+		}
+	}()
+}
+
+func (m *MemberRole) watchStreamLoop(ctx context.Context, nodeID string, currentRev *int64, eventChan chan<- ReconcileEvent) bool {
+	watchChan := m.store.WatchNodeAssignmentsFromRev(ctx, nodeID, *currentRev+1)
+	log.Printf("[Member] Monitoring assignment watch stream from revision: %d", *currentRev+1)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return false
+		case resp, ok := <-watchChan:
+			if !ok {
+				log.Printf("[Member] Assignment watch channel closed. Reconnecting...")
+				return true
+			}
+
+			if resp.Canceled {
+				log.Printf("[Member] Assignment watch canceled (Error: %v). Reconnecting...", resp.Err())
+				if errors.Is(resp.Err(), context.Canceled) {
+					return false
+				}
+				return true
+			}
+
+			if resp.Header.Revision > *currentRev {
+				*currentRev = resp.Header.Revision
+			}
+
+			for _, ev := range resp.Events {
+				var currentIDs []string
+				if ev.Type != clientv3.EventTypeDelete {
+					if err := json.Unmarshal(ev.Kv.Value, &currentIDs); err != nil {
+						log.Printf("[Member] Error unmarshaling watched assignments: %v", err)
+						continue
+					}
+				}
+
+				evt := ReconcileEvent{
+					Type:        EventWatch,
+					WatchIDs:    currentIDs,
+					HasWatchIDs: true,
+				}
+
+				select {
+				case eventChan <- evt:
+				default:
+				}
+			}
+		}
+	}
+}
+
+func (m *MemberRole) reconcile(
 	ctx context.Context,
-	s MemberStore,
 	desiredIDs []string,
 	runningRuntimes map[string]*AssignmentRuntime,
 	sess adapters.SessionWrapper,
@@ -281,23 +296,20 @@ func reconcile(
 	for _, id := range desiredIDs {
 		if _, running := runningRuntimes[id]; !running {
 			log.Printf("[Reconciliation] Discovered new assignment: %s. Fetching definition...", id)
-			asg, err := s.GetAssignmentDefinition(ctx, id)
+			asg, err := m.store.GetAssignmentDefinition(ctx, id)
 			if err != nil {
 				log.Printf("[Reconciliation] Failed to fetch definition for %s: %v", id, err)
 				continue
 			}
 
-			factory, found := Registry[asg.Role]
-			if !found {
-				log.Printf("[Reconciliation] Unknown role '%s' for assignment %s", asg.Role, id)
+			log.Printf("[Reconciliation] Starting assignment %s with role %s", id, asg.Role)
+
+			if err := m.registry.Start(ctx, asg, sess); err != nil {
+				log.Printf("[Reconciliation] Failed to start assignment %s: %v", id, err)
 				continue
 			}
 
-			runner := factory(s)
-
-			log.Printf("[Reconciliation] Starting assignment %s with role %s", id, asg.Role)
 			runtime := NewAssignmentRuntime(asg)
-			runtime.Start(ctx, runner, sess)
 			runningRuntimes[id] = runtime
 		}
 	}

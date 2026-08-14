@@ -21,13 +21,17 @@ import (
 )
 
 type HttpServer struct {
-	server *http.Server
-	appCtx context.Context
-	store  *adapters.Store
+	server   *http.Server
+	appCtx   context.Context
+	store    *adapters.Store
+	registry *roles.Registry
 }
 
-func NewHttpServer(appCtx context.Context, addr string) *HttpServer {
-	s := &HttpServer{appCtx: appCtx}
+func NewHttpServer(appCtx context.Context, addr string, registry *roles.Registry) *HttpServer {
+	s := &HttpServer{
+		appCtx:   appCtx,
+		registry: registry,
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/initialize", s.handleInitialize)
@@ -39,84 +43,6 @@ func NewHttpServer(appCtx context.Context, addr string) *HttpServer {
 		Handler: mux,
 	}
 	return s
-}
-
-func (s *HttpServer) handleInitialize(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	nodeID := config.NodeID()
-	log.Printf("[HTTP] Received /initialize request for node %s", nodeID)
-
-	checkCmd := exec.CommandContext(r.Context(), "docker", "compose", "ps", "-q", "etcd")
-	checkCmd.Dir = "/root/bootstrap"
-	out, err := checkCmd.Output()
-	if err == nil && len(strings.TrimSpace(string(out))) > 0 {
-		log.Printf("[HTTP] etcd container already present for node %s. Skipping boot.", nodeID)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(fmt.Sprintf("Node %s is already initialized (etcd container detected).\n", nodeID)))
-		return
-	}
-
-	log.Printf("[HTTP] Starting etcd container in 'new' mode...")
-	cmd := exec.CommandContext(r.Context(), "docker", "compose", "up", "-d", "etcd")
-	cmd.Dir = "/root/bootstrap"
-
-	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("[HTTP] Docker Compose error: %v, Output: %s", err, string(out))
-		http.Error(w, fmt.Sprintf("failed to start etcd container: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	log.Println("[HTTP] Connecting gRPC client to localhost:2379...")
-
-	var cli *clientv3.Client
-	for i := 0; i < 5; i++ {
-		cli, err = clientv3.New(clientv3.Config{
-			Endpoints:   []string{"localhost:2379"},
-			DialTimeout: 2 * time.Second,
-		})
-		if err == nil {
-			ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-			_, err = cli.Status(ctx, "localhost:2379")
-			cancel()
-			if err == nil {
-				break
-			}
-			cli.Close()
-		}
-		time.Sleep(1 * time.Second)
-	}
-
-	if err != nil {
-		log.Printf("[HTTP] Failed to connect to etcd gRPC: %v", err)
-		http.Error(w, "etcd started but gRPC connection failed", http.StatusInternalServerError)
-		return
-	}
-
-	s.store = adapters.NewStore(cli)
-	log.Println("[HTTP] etcd store successfully bound to controller!")
-
-	log.Println("[HTTP] Transitioning node into active Member role...")
-	if factory, found := roles.Registry["member"]; found {
-		memberRunner := factory(s.store)
-		memberAsg := &models.Assignment{
-			NodeID: nodeID,
-			ID:     "member-" + nodeID,
-			Role:   "member",
-		}
-		go func() {
-			if err := memberRunner.Run(s.appCtx, memberAsg, nil); err != nil {
-				log.Printf("[HTTP] Member role execution exited with error: %v", err)
-			}
-		}()
-	} else {
-		log.Println("[HTTP] CRITICAL ERROR: 'member' role not registered in roles.Registry")
-	}
-
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(fmt.Sprintf("Cluster initialized on node %s. etcd is online.\n", nodeID)))
 }
 
 func (s *HttpServer) Start() {
@@ -131,6 +57,48 @@ func (s *HttpServer) Start() {
 func (s *HttpServer) Shutdown(ctx context.Context) error {
 	log.Println("[HTTP] Shutting down...")
 	return s.server.Shutdown(ctx)
+}
+
+func (s *HttpServer) handleInitialize(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	nodeID := config.NodeID()
+	log.Printf("[HTTP] Received /initialize request for node %s", nodeID)
+
+	out, err := runDockerCompose(r.Context(), "ps", "-q", "etcd")
+	if err == nil && len(strings.TrimSpace(string(out))) > 0 {
+		log.Printf("[HTTP] etcd container already present for node %s. Skipping boot.", nodeID)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(fmt.Sprintf("Node %s is already initialized (etcd container detected).\n", nodeID)))
+		return
+	}
+
+	log.Printf("[HTTP] Starting etcd container in 'new' mode...")
+	if _, err := runDockerCompose(r.Context(), "up", "-d", "etcd"); err != nil {
+		log.Printf("[HTTP] Docker Compose error: %v", err)
+		http.Error(w, fmt.Sprintf("failed to start etcd container: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[HTTP] Connecting gRPC client to %s...", config.EtcdGRPCEndpoint)
+	cli, err := s.connectEtcdClient(r.Context())
+	if err != nil {
+		log.Printf("[HTTP] Failed to connect to etcd gRPC: %v", err)
+		http.Error(w, "etcd started but gRPC connection failed", http.StatusInternalServerError)
+		return
+	}
+
+	if err := s.startMemberRole(cli); err != nil {
+		log.Printf("[HTTP] %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(fmt.Sprintf("Cluster initialized on node %s. etcd is online.\n", nodeID)))
 }
 
 func (s *HttpServer) handleAssimilate(w http.ResponseWriter, r *http.Request) {
@@ -148,9 +116,7 @@ func (s *HttpServer) handleAssimilate(w http.ResponseWriter, r *http.Request) {
 	nodeID := config.NodeID()
 	log.Printf("[HTTP] Received /assimilate for node %s", nodeID)
 
-	bootstrapDir := "/root/bootstrap"
-	envFile := fmt.Sprintf("%s/.env", bootstrapDir)
-
+	envFile := fmt.Sprintf("%s/.env", config.BootstrapDir)
 	envContent := fmt.Sprintf(
 		"HOSTNAME=%s\nTAILSCALE_IP=%s\nETCD_NAME=%s\nETCD_INITIAL_CLUSTER=%s\nETCD_INITIAL_CLUSTER_STATE=existing\n",
 		nodeID,
@@ -164,26 +130,28 @@ func (s *HttpServer) handleAssimilate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	downCmd := exec.CommandContext(r.Context(), "docker", "compose", "down", "etcd", "--volumes", "--remove-orphans")
-	downCmd.Dir = bootstrapDir
-	_ = downCmd.Run()
+	_, _ = runDockerCompose(r.Context(), "down", "etcd", "--volumes", "--remove-orphans")
 
-	upCmd := exec.CommandContext(r.Context(), "docker", "compose", "up", "-d", "etcd")
-	upCmd.Dir = bootstrapDir
-	if err := upCmd.Run(); err != nil {
-		http.Error(w, "failed to start etcd container", http.StatusInternalServerError)
+	if _, err := runDockerCompose(r.Context(), "up", "-d", "etcd"); err != nil {
+		http.Error(w, fmt.Sprintf("failed to start etcd container: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	var ready bool
-	for i := 0; i < 15; i++ {
-		conn, err := net.DialTimeout("tcp", "127.0.0.1:2379", 1*time.Second)
+	for i := 0; i < config.EtcdSocketPollAttempts; i++ {
+		conn, err := net.DialTimeout("tcp", config.EtcdDialSocket, config.EtcdSocketPollInterval)
 		if err == nil {
 			_ = conn.Close()
 			ready = true
 			break
 		}
-		time.Sleep(1 * time.Second)
+
+		select {
+		case <-r.Context().Done():
+			http.Error(w, "request cancelled", http.StatusRequestTimeout)
+			return
+		case <-time.After(config.EtcdSocketPollInterval):
+		}
 	}
 
 	if !ready {
@@ -204,32 +172,77 @@ func (s *HttpServer) handleActivate(w http.ResponseWriter, r *http.Request) {
 	nodeID := config.NodeID()
 	log.Printf("[HTTP] Received /activate request for node %s. Connecting gRPC client...", nodeID)
 
-	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{"localhost:2379"},
-		DialTimeout: 5 * time.Second,
-	})
+	cli, err := s.connectEtcdClient(r.Context())
 	if err != nil {
 		log.Printf("[HTTP] Failed to connect to gRPC post-promotion: %v", err)
 		http.Error(w, "gRPC connection failed", http.StatusInternalServerError)
 		return
 	}
 
-	s.store = adapters.NewStore(cli)
-
-	if factory, found := roles.Registry["member"]; found {
-		memberRunner := factory(s.store)
-		memberAsg := &models.Assignment{
-			NodeID: nodeID,
-			ID:     "member-" + nodeID,
-			Role:   "member",
-		}
-		go func() {
-			if err := memberRunner.Run(s.appCtx, memberAsg, nil); err != nil {
-				log.Printf("[HTTP] Member role execution exited: %v", err)
-			}
-		}()
+	if err := s.startMemberRole(cli); err != nil {
+		log.Printf("[HTTP] %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(fmt.Sprintf("Node %s activated as active Voter member.\n", nodeID)))
+}
+
+func runDockerCompose(ctx context.Context, args ...string) ([]byte, error) {
+	cmdArgs := append([]string{"compose"}, args...)
+	cmd := exec.CommandContext(ctx, "docker", cmdArgs...)
+	cmd.Dir = config.BootstrapDir
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return out, fmt.Errorf("docker compose %s failed: %w (output: %s)", strings.Join(args, " "), err, string(out))
+	}
+	return out, nil
+}
+
+func (s *HttpServer) connectEtcdClient(ctx context.Context) (*clientv3.Client, error) {
+	var cli *clientv3.Client
+	var err error
+
+	for i := 0; i < config.EtcdConnectRetryAttempts; i++ {
+		cli, err = clientv3.New(clientv3.Config{
+			Endpoints:   []string{config.EtcdGRPCEndpoint},
+			DialTimeout: config.EtcdDialTimeout,
+		})
+		if err == nil {
+			statusCtx, cancel := context.WithTimeout(ctx, config.EtcdStatusTimeout)
+			_, err = cli.Status(statusCtx, config.EtcdGRPCEndpoint)
+			cancel()
+			if err == nil {
+				return cli, nil
+			}
+			cli.Close()
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(config.EtcdConnectRetryInterval):
+		}
+	}
+
+	return nil, fmt.Errorf("failed to establish healthy etcd gRPC connection after retries: %w", err)
+}
+
+func (s *HttpServer) startMemberRole(cli *clientv3.Client) error {
+	s.store = adapters.NewStore(cli)
+	log.Println("[HTTP] etcd store successfully bound to controller!")
+
+	s.registry.SetStore(s.store)
+
+	nodeID := config.NodeID()
+	memberAsg := roles.NewMemberAssignment(nodeID)
+
+	log.Println("[HTTP] Transitioning node into active Member role...")
+	if err := s.registry.Start(s.appCtx, memberAsg, nil); err != nil {
+		return fmt.Errorf("failed to start member role: %w", err)
+	}
+
+	return nil
 }

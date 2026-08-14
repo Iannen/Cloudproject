@@ -1,14 +1,14 @@
 package main
 
 import (
+	"cloud-controller/src/config"
+	"cloud-controller/src/infra"
+	"cloud-controller/src/roles"
 	"context"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
-
-	"cloud-controller/src/config"
-	"cloud-controller/src/infra"
 )
 
 func main() {
@@ -21,7 +21,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	server := infra.NewHttpServer(ctx, ":8080")
+	reg := roles.NewRegistry()
+
+	server := infra.NewHttpServer(ctx, ":8080", reg)
 	server.Start()
 
 	sigChan := make(chan os.Signal, 1)

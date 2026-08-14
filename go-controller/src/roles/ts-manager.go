@@ -40,21 +40,8 @@ type TailscalePeer struct {
 	Online       bool     `json:"Online"`
 }
 
-func init() {
-	RegisterRole("tailscale-manager", func(store any) RoleRunner {
-		tsStore, ok := store.(TsManagerStore)
-		if !ok {
-			panic("store passed to tailscale-manager does not implement TsManagerStore")
-		}
-		return &TailscaleManagerRole{
-			store:      tsStore,
-			httpClient: &http.Client{Timeout: 5 * time.Second},
-		}
-	})
-}
-
 func (t *TailscaleManagerRole) Run(ctx context.Context, asg *models.Assignment, sess adapters.SessionWrapper) error {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(config.TSManagerPollInterval)
 	defer ticker.Stop()
 
 	log.Printf("[TailscaleManager] Started on node %s for assignment %s", asg.NodeID, asg.ID)
@@ -91,7 +78,7 @@ func (t *TailscaleManagerRole) reconcileTailnet(ctx context.Context) {
 		if !peer.Online || len(peer.TailscaleIPs) == 0 {
 			continue
 		}
-		if !strings.HasPrefix(peer.HostName, "kaffcloud") {
+		if !strings.HasPrefix(peer.HostName, config.NodeNamePrefix) {
 			continue
 		}
 
@@ -103,8 +90,7 @@ func (t *TailscaleManagerRole) reconcileTailnet(ctx context.Context) {
 }
 
 func (t *TailscaleManagerRole) getTailscalePeers(ctx context.Context) ([]*TailscalePeer, error) {
-	cmd := exec.CommandContext(ctx, "tailscale", "status", "--json")
-	out, err := cmd.Output()
+	out, err := exec.CommandContext(ctx, "tailscale", "status", "--json").Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to run tailscale status: %w", err)
 	}
@@ -126,7 +112,7 @@ func (t *TailscaleManagerRole) getTailscalePeers(ctx context.Context) ([]*Tailsc
 
 func (t *TailscaleManagerRole) assimilateNode(ctx context.Context, peer *TailscalePeer) {
 	targetIP := peer.TailscaleIPs[0]
-	targetPeerURL := fmt.Sprintf("http://%s:2380", targetIP)
+	targetPeerURL := fmt.Sprintf("http://%s:%d", targetIP, config.EtcdPeerPort)
 
 	localIP, err := t.getLocalTailscaleIP(ctx)
 	if err != nil {
