@@ -12,10 +12,6 @@ import (
 )
 
 func main() {
-	if os.Getenv("NODE_ID") == "" {
-		log.Fatalf("[Main] Critical Error: NODE_ID environment variable is required but not set.")
-	}
-	config.InitNodeID()
 	log.Printf("[Main] Starting controller node with ID: %s", config.NodeID())
 
 	ctx, cancel := context.WithCancel(context.Background())

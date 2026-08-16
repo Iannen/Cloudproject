@@ -7,89 +7,85 @@ import (
 	"net/http"
 	"sync"
 
-	"cloud-controller/src/adapters"
 	"cloud-controller/src/config"
 	"cloud-controller/src/models"
+
+	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
 type RoleRunner interface {
-	Run(ctx context.Context, asg *models.Assignment, sess adapters.SessionWrapper) error
+	Run(ctx context.Context, asg *models.Assignment, sess *concurrency.Session) error
 }
 
 type Registry struct {
-	mu    sync.RWMutex
-	store any
+	mu  sync.RWMutex
+	str any
 }
 
 func NewRegistry() *Registry {
 	return &Registry{}
 }
 
-func (r *Registry) SetStore(store any) {
+func (r *Registry) SetStore(str any) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.store = store
+	r.str = str
 }
 
-func (r *Registry) Start(ctx context.Context, asg *models.Assignment, sess adapters.SessionWrapper) error {
-	if asg == nil {
-		return fmt.Errorf("registry error: assignment cannot be nil")
+func (r *Registry) Start(ctx context.Context, a *models.Assignment, s *concurrency.Session) error {
+	if a == nil {
+		return fmt.Errorf("assignment is nil")
 	}
 
 	r.mu.RLock()
-	store := r.store
+	str := r.str
 	r.mu.RUnlock()
 
-	if store == nil {
-		return fmt.Errorf("registry error: store not initialized")
+	if str == nil {
+		return fmt.Errorf("store not initialized")
 	}
 
-	runner, err := r.createRunner(asg.Role, store)
+	rn, err := r.runner(a.Role, str)
 	if err != nil {
-		return fmt.Errorf("registry error: %w", err)
+		return err
 	}
 
 	go func() {
-		if err := runner.Run(ctx, asg, sess); err != nil && ctx.Err() == nil {
-			log.Printf("[%s] Role execution exited with error: %v", asg.Role, err)
+		if err := rn.Run(ctx, a, s); err != nil && ctx.Err() == nil {
+			log.Printf("[%s] Exited with error: %v", a.Role, err)
 		}
 	}()
 
 	return nil
 }
 
-func (r *Registry) createRunner(role string, store any) (RoleRunner, error) {
+func (r *Registry) runner(role string, str any) (RoleRunner, error) {
 	switch role {
 	case "member":
-		memberStore, ok := store.(MemberStore)
+		s, ok := str.(MemberStore)
 		if !ok {
-			return nil, fmt.Errorf("store does not implement MemberStore")
+			return nil, fmt.Errorf("invalid MemberStore")
 		}
-		return &MemberRole{
-			store:    memberStore,
-			registry: r,
-		}, nil
+		return &MemberRole{store: s, registry: r}, nil
 
 	case "leader":
-		leaderStore, ok := store.(LeaderStore)
+		s, ok := str.(LeaderStore)
 		if !ok {
-			return nil, fmt.Errorf("store does not implement LeaderStore")
+			return nil, fmt.Errorf("invalid LeaderStore")
 		}
-		return &LeaderRole{
-			store: leaderStore,
-		}, nil
+		return &LeaderRole{store: s}, nil
 
 	case "tailscale-manager":
-		tsStore, ok := store.(TsManagerStore)
+		s, ok := str.(TsManagerStore)
 		if !ok {
-			return nil, fmt.Errorf("store does not implement TsManagerStore")
+			return nil, fmt.Errorf("invalid TsManagerStore")
 		}
-		return &TailscaleManagerRole{
-			store:      tsStore,
-			httpClient: &http.Client{Timeout: config.HTTPTimeout},
+		return &TSMgr{
+			str: s,
+			cli: &http.Client{Timeout: config.Timeout},
 		}, nil
 
 	default:
-		return nil, fmt.Errorf("unknown role '%s'", role)
+		return nil, fmt.Errorf("unknown role: %s", role)
 	}
 }

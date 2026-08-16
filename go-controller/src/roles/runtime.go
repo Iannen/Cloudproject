@@ -4,8 +4,9 @@ import (
 	"context"
 	"log"
 
-	"cloud-controller/src/adapters"
 	"cloud-controller/src/models"
+
+	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
 type AssignmentRuntime struct {
@@ -26,7 +27,7 @@ func NewAssignmentRuntime(asg *models.Assignment) *AssignmentRuntime {
 func (r *AssignmentRuntime) Start(
 	parentCtx context.Context,
 	runner RoleRunner,
-	sess adapters.SessionWrapper,
+	sess *concurrency.Session,
 ) {
 	ctx, cancel := context.WithCancel(parentCtx)
 	r.CancelFunc = cancel

@@ -7,20 +7,20 @@ import (
 	"log"
 	"time"
 
-	"cloud-controller/src/adapters"
 	"cloud-controller/src/config"
 	"cloud-controller/src/models"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
 type MemberStore interface {
-	GetNodeAssignmentsWithRev(ctx context.Context, nodeID string) ([]string, int64, error)
-	WatchNodeAssignmentsFromRev(ctx context.Context, nodeID string, rev int64) clientv3.WatchChan
-	GetAssignmentDefinition(ctx context.Context, assignmentID string) (*models.Assignment, error)
-	NewSession(ctx context.Context, ttl int64) (adapters.SessionWrapper, error)
-	PutWithSession(ctx context.Context, sess adapters.SessionWrapper, key string, value string) error
-	TryClaimLeadership(ctx context.Context, sess adapters.SessionWrapper, nodeID string) (bool, error)
+	NodeAssignments(ctx context.Context, nodeID string) ([]string, int64, error)
+	WatchAssignments(ctx context.Context, nodeID string, rev int64) clientv3.WatchChan
+	AssignmentDef(ctx context.Context, assignmentID string) (*models.Assignment, error)
+	NewSession(ctx context.Context, ttl int64) (*concurrency.Session, error)
+	PutWithSession(ctx context.Context, sess *concurrency.Session, key string, value string) error
+	ClaimLeader(ctx context.Context, sess *concurrency.Session, nodeID string) (bool, error)
 	WatchLeaderKey(ctx context.Context, notifyChan chan<- struct{})
 }
 
@@ -32,17 +32,17 @@ func NewMemberAssignment(nodeID string) *models.Assignment {
 	}
 }
 
-type EventType int
+type eventType int
 
 const (
-	EventTick EventType = iota
-	EventWatch
+	evtTick eventType = iota
+	evtWatch
 )
 
-type ReconcileEvent struct {
-	Type        EventType
-	WatchIDs    []string
-	HasWatchIDs bool
+type event struct {
+	kind   eventType
+	ids    []string
+	hasIDs bool
 }
 
 type MemberRole struct {
@@ -50,133 +50,131 @@ type MemberRole struct {
 	registry *Registry
 }
 
-func stopAllRuntimes(runningRuntimes map[string]*AssignmentRuntime) {
-	for id, runtime := range runningRuntimes {
+func stopAllRuntimes(rts map[string]*AssignmentRuntime) {
+	for id, rt := range rts {
 		log.Printf("[Member] Stopping active runtime %s during session transition/teardown", id)
-		runtime.Stop()
-		delete(runningRuntimes, id)
+		rt.Stop()
+		delete(rts, id)
 	}
 }
 
-func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess adapters.SessionWrapper) error {
+func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess *concurrency.Session) error {
 	nodeID := config.NodeID()
 	log.Printf("[Member] Permanent member role started for node %s", nodeID)
 
-	nodeHeartbeatKey := config.NodeHeartbeatPath(nodeID)
-	runningRuntimes := make(map[string]*AssignmentRuntime)
+	hbKey := config.NodeHeartbeatPath(nodeID)
+	rts := make(map[string]*AssignmentRuntime)
 
 	for {
 		select {
 		case <-ctx.Done():
-			stopAllRuntimes(runningRuntimes)
+			stopAllRuntimes(rts)
 			return nil
 		default:
 		}
 
-		sess, err := m.store.NewSession(ctx, config.EtcdSessionTTLSeconds)
+		sess, err := m.store.NewSession(ctx, config.SessionTTL)
 		if err != nil {
 			log.Printf("[Member] Failed to establish fresh session: %v. Retrying in 2 seconds...", err)
 			select {
 			case <-ctx.Done():
 				return nil
-			case <-time.After(config.MemberConnectRetryInterval):
+			case <-time.After(config.RetryInterval):
 			}
 			continue
 		}
 
-		sessCtx, cancelSess := context.WithCancel(ctx)
-		eventChan := make(chan ReconcileEvent, 10)
+		sCtx, cancel := context.WithCancel(ctx)
+		ch := make(chan event, 10)
 
-		if err := m.store.PutWithSession(sessCtx, sess, nodeHeartbeatKey, "alive"); err != nil {
+		if err := m.store.PutWithSession(sCtx, sess, hbKey, "alive"); err != nil {
 			log.Printf("[Member] Failed to register node heartbeat: %v. Resetting session...", err)
-			cancelSess()
+			cancel()
 			_ = sess.Close()
 			continue
 		}
 
-		isLeader, err := m.store.TryClaimLeadership(sessCtx, sess, nodeID)
+		isLeader, err := m.store.ClaimLeader(sCtx, sess, nodeID)
 		if err != nil {
 			log.Printf("[Member] Leader check failed: %v", err)
 		}
 
 		if isLeader {
 			log.Println("[Member] This node won leadership! Launching Leader Role...")
-
 			leaderAsg := &models.Assignment{
 				NodeID: nodeID,
 				ID:     "leader-" + nodeID,
 				Role:   "leader",
 			}
-
-			if err := m.registry.Start(sessCtx, leaderAsg, sess); err != nil {
+			if err := m.registry.Start(sCtx, leaderAsg, sess); err != nil {
 				log.Printf("[Member] Failed to start leader role: %v", err)
 			}
 		} else {
-			m.spawnLeaderWatcher(sessCtx, eventChan)
+			m.startLeaderWatcher(sCtx, ch)
 		}
 
-		initialIDs, lastRevision, err := m.store.GetNodeAssignmentsWithRev(sessCtx, nodeID)
+		initIDs, rev, err := m.store.NodeAssignments(sCtx, nodeID)
 		if err != nil {
 			log.Printf("[Member] Error fetching initial bootstrap assignments: %v. Resetting session...", err)
-			cancelSess()
+			cancel()
 			_ = sess.Close()
 			continue
 		}
 
-		m.reconcile(sessCtx, initialIDs, runningRuntimes, sess)
+		m.reconcile(sCtx, initIDs, rts, sess)
 
-		m.spawnWatchListener(sessCtx, nodeID, lastRevision, eventChan)
-		m.spawnTickerNotifier(sessCtx, eventChan)
+		m.startWatch(sCtx, nodeID, rev, ch)
+		m.startTicker(sCtx, ch)
 
-		sessionAlive := true
-		for sessionAlive {
+		alive := true
+		for alive {
 			select {
 			case <-ctx.Done():
-				cancelSess()
-				stopAllRuntimes(runningRuntimes)
+				cancel()
+				stopAllRuntimes(rts)
 				_ = sess.Close()
 				return nil
 
 			case <-sess.Done():
 				log.Println("[Member] CRITICAL: Session lease lost! Evicting child roles...")
-				cancelSess()
-				stopAllRuntimes(runningRuntimes)
-				sessionAlive = false
+				cancel()
+				stopAllRuntimes(rts)
+				alive = false
 
-			case evt := <-eventChan:
-				var targetIDs []string
-				if evt.Type == EventWatch && evt.HasWatchIDs {
-					targetIDs = evt.WatchIDs
+			case e := <-ch:
+				var targets []string
+				if e.kind == evtWatch && e.hasIDs {
+					targets = e.ids
 				} else {
-					ids, _, err := m.store.GetNodeAssignmentsWithRev(sessCtx, nodeID)
+					ids, _, err := m.store.NodeAssignments(sCtx, nodeID)
 					if err != nil {
 						log.Printf("[Member] Error updating assignment state from ticker: %v", err)
 						continue
 					}
-					targetIDs = ids
+					targets = ids
 				}
 
-				m.reconcile(sessCtx, targetIDs, runningRuntimes, sess)
+				m.reconcile(sCtx, targets, rts, sess)
 			}
 		}
 
-		cancelSess()
+		cancel()
 		_ = sess.Close()
 	}
 }
 
-func (m *MemberRole) spawnTickerNotifier(ctx context.Context, eventChan chan<- ReconcileEvent) {
+func (m *MemberRole) startTicker(ctx context.Context, ch chan<- event) {
 	go func() {
-		ticker := time.NewTicker(config.MemberReconcileInterval)
-		defer ticker.Stop()
+		tk := time.NewTicker(config.ReconcileInterval)
+		defer tk.Stop()
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
+			case <-tk.C:
 				select {
-				case eventChan <- ReconcileEvent{Type: EventTick}:
+				case ch <- event{kind: evtTick}:
 				default:
 				}
 			}
@@ -184,26 +182,25 @@ func (m *MemberRole) spawnTickerNotifier(ctx context.Context, eventChan chan<- R
 	}()
 }
 
-func (m *MemberRole) spawnLeaderWatcher(ctx context.Context, eventChan chan<- ReconcileEvent) {
-	leaderDeletedChan := make(chan struct{}, 1)
-	go m.store.WatchLeaderKey(ctx, leaderDeletedChan)
+func (m *MemberRole) startLeaderWatcher(ctx context.Context, ch chan<- event) {
+	delCh := make(chan struct{}, 1)
+	go m.store.WatchLeaderKey(ctx, delCh)
 
 	go func() {
 		select {
 		case <-ctx.Done():
 			return
-		case <-leaderDeletedChan:
+		case <-delCh:
 			select {
-			case eventChan <- ReconcileEvent{Type: EventTick}:
+			case ch <- event{kind: evtTick}:
 			default:
 			}
 		}
 	}()
 }
 
-func (m *MemberRole) spawnWatchListener(ctx context.Context, nodeID string, startRev int64, eventChan chan<- ReconcileEvent) {
+func (m *MemberRole) startWatch(ctx context.Context, nodeID string, rev int64, ch chan<- event) {
 	go func() {
-		currentRev := startRev
 		for {
 			select {
 			case <-ctx.Done():
@@ -211,28 +208,28 @@ func (m *MemberRole) spawnWatchListener(ctx context.Context, nodeID string, star
 			default:
 			}
 
-			if !m.watchStreamLoop(ctx, nodeID, &currentRev, eventChan) {
+			if !m.watchLoop(ctx, nodeID, &rev, ch) {
 				return
 			}
 
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(config.MemberWatchReconnectDelay):
+			case <-time.After(config.WatchReconnectDelay):
 			}
 		}
 	}()
 }
 
-func (m *MemberRole) watchStreamLoop(ctx context.Context, nodeID string, currentRev *int64, eventChan chan<- ReconcileEvent) bool {
-	watchChan := m.store.WatchNodeAssignmentsFromRev(ctx, nodeID, *currentRev+1)
-	log.Printf("[Member] Monitoring assignment watch stream from revision: %d", *currentRev+1)
+func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, ch chan<- event) bool {
+	wCh := m.store.WatchAssignments(ctx, nodeID, *rev+1)
+	log.Printf("[Member] Monitoring assignment watch stream from revision: %d", *rev+1)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return false
-		case resp, ok := <-watchChan:
+		case resp, ok := <-wCh:
 			if !ok {
 				log.Printf("[Member] Assignment watch channel closed. Reconnecting...")
 				return true
@@ -240,33 +237,24 @@ func (m *MemberRole) watchStreamLoop(ctx context.Context, nodeID string, current
 
 			if resp.Canceled {
 				log.Printf("[Member] Assignment watch canceled (Error: %v). Reconnecting...", resp.Err())
-				if errors.Is(resp.Err(), context.Canceled) {
-					return false
-				}
-				return true
+				return !errors.Is(resp.Err(), context.Canceled)
 			}
 
-			if resp.Header.Revision > *currentRev {
-				*currentRev = resp.Header.Revision
+			if resp.Header.Revision > *rev {
+				*rev = resp.Header.Revision
 			}
 
 			for _, ev := range resp.Events {
-				var currentIDs []string
+				var ids []string
 				if ev.Type != clientv3.EventTypeDelete {
-					if err := json.Unmarshal(ev.Kv.Value, &currentIDs); err != nil {
+					if err := json.Unmarshal(ev.Kv.Value, &ids); err != nil {
 						log.Printf("[Member] Error unmarshaling watched assignments: %v", err)
 						continue
 					}
 				}
 
-				evt := ReconcileEvent{
-					Type:        EventWatch,
-					WatchIDs:    currentIDs,
-					HasWatchIDs: true,
-				}
-
 				select {
-				case eventChan <- evt:
+				case ch <- event{kind: evtWatch, ids: ids, hasIDs: true}:
 				default:
 				}
 			}
@@ -276,27 +264,27 @@ func (m *MemberRole) watchStreamLoop(ctx context.Context, nodeID string, current
 
 func (m *MemberRole) reconcile(
 	ctx context.Context,
-	desiredIDs []string,
-	runningRuntimes map[string]*AssignmentRuntime,
-	sess adapters.SessionWrapper,
+	ids []string,
+	rts map[string]*AssignmentRuntime,
+	sess *concurrency.Session,
 ) {
-	desiredMap := make(map[string]bool)
-	for _, id := range desiredIDs {
-		desiredMap[id] = true
+	want := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		want[id] = true
 	}
 
-	for id, runtime := range runningRuntimes {
-		if !desiredMap[id] {
+	for id, rt := range rts {
+		if !want[id] {
 			log.Printf("[Reconciliation] Stopping assignment: %s", id)
-			runtime.Stop()
-			delete(runningRuntimes, id)
+			rt.Stop()
+			delete(rts, id)
 		}
 	}
 
-	for _, id := range desiredIDs {
-		if _, running := runningRuntimes[id]; !running {
+	for _, id := range ids {
+		if _, ok := rts[id]; !ok {
 			log.Printf("[Reconciliation] Discovered new assignment: %s. Fetching definition...", id)
-			asg, err := m.store.GetAssignmentDefinition(ctx, id)
+			asg, err := m.store.AssignmentDef(ctx, id)
 			if err != nil {
 				log.Printf("[Reconciliation] Failed to fetch definition for %s: %v", id, err)
 				continue
@@ -309,8 +297,7 @@ func (m *MemberRole) reconcile(
 				continue
 			}
 
-			runtime := NewAssignmentRuntime(asg)
-			runningRuntimes[id] = runtime
+			rts[id] = NewAssignmentRuntime(asg)
 		}
 	}
 }

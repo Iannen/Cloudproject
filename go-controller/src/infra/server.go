@@ -21,228 +21,173 @@ import (
 )
 
 type HttpServer struct {
-	server   *http.Server
-	appCtx   context.Context
-	store    *adapters.Store
-	registry *roles.Registry
+	srv *http.Server
+	ctx context.Context
+	str *adapters.Store
+	reg *roles.Registry
 }
 
-func NewHttpServer(appCtx context.Context, addr string, registry *roles.Registry) *HttpServer {
-	s := &HttpServer{
-		appCtx:   appCtx,
-		registry: registry,
-	}
+func NewHttpServer(ctx context.Context, addr string, reg *roles.Registry) *HttpServer {
 	mux := http.NewServeMux()
+	s := &HttpServer{ctx: ctx, reg: reg}
 
-	mux.HandleFunc("/initialize", s.handleInitialize)
+	mux.HandleFunc("/initialize", s.handleInit)
 	mux.HandleFunc("/assimilate", s.handleAssimilate)
 	mux.HandleFunc("/activate", s.handleActivate)
 
-	s.server = &http.Server{
-		Addr:    addr,
-		Handler: mux,
-	}
+	s.srv = &http.Server{Addr: addr, Handler: mux}
 	return s
 }
 
 func (s *HttpServer) Start() {
-	log.Printf("[HTTP] Server running on %s", s.server.Addr)
+	log.Printf("[HTTP] Running on %s", s.srv.Addr)
 	go func() {
-		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("[HTTP] Server error: %v", err)
+		if err := s.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("[HTTP] Error: %v", err)
 		}
 	}()
 }
 
 func (s *HttpServer) Shutdown(ctx context.Context) error {
-	log.Println("[HTTP] Shutting down...")
-	return s.server.Shutdown(ctx)
+	return s.srv.Shutdown(ctx)
 }
 
-func (s *HttpServer) handleInitialize(w http.ResponseWriter, r *http.Request) {
+func httpErr(w http.ResponseWriter, msg string, code int) {
+	log.Printf("[HTTP] %d: %s", code, msg)
+	http.Error(w, msg, code)
+}
+
+func (s *HttpServer) handleInit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		httpErr(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	nodeID := config.NodeID()
-	log.Printf("[HTTP] Received /initialize request for node %s", nodeID)
-
-	out, err := runDockerCompose(r.Context(), "ps", "-q", "etcd")
-	if err == nil && len(strings.TrimSpace(string(out))) > 0 {
-		log.Printf("[HTTP] etcd container already present for node %s. Skipping boot.", nodeID)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(fmt.Sprintf("Node %s is already initialized (etcd container detected).\n", nodeID)))
+	id := config.NodeID()
+	if out, err := runCompose(r.Context(), "ps", "-q", "etcd"); err == nil && len(strings.TrimSpace(string(out))) > 0 {
+		fmt.Fprintf(w, "Node %s already initialized.\n", id)
 		return
 	}
 
-	log.Printf("[HTTP] Starting etcd container in 'new' mode...")
-	if _, err := runDockerCompose(r.Context(), "up", "-d", "etcd"); err != nil {
-		log.Printf("[HTTP] Docker Compose error: %v", err)
-		http.Error(w, fmt.Sprintf("failed to start etcd container: %v", err), http.StatusInternalServerError)
+	if _, err := runCompose(r.Context(), "up", "-d", "etcd"); err != nil {
+		httpErr(w, fmt.Sprintf("etcd start failed: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[HTTP] Connecting gRPC client to %s...", config.EtcdGRPCEndpoint)
-	cli, err := s.connectEtcdClient(r.Context())
+	cli, err := s.connectEtcd(r.Context())
 	if err != nil {
-		log.Printf("[HTTP] Failed to connect to etcd gRPC: %v", err)
-		http.Error(w, "etcd started but gRPC connection failed", http.StatusInternalServerError)
+		httpErr(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if err := s.startMemberRole(cli); err != nil {
-		log.Printf("[HTTP] %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := s.startMember(cli); err != nil {
+		httpErr(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(fmt.Sprintf("Cluster initialized on node %s. etcd is online.\n", nodeID)))
+	fmt.Fprintf(w, "Node %s initialized.\n", id)
 }
 
 func (s *HttpServer) handleAssimilate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		httpErr(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var payload models.AssimilatePayload
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		http.Error(w, fmt.Sprintf("invalid payload: %v", err), http.StatusBadRequest)
+	var p models.AssimilatePayload
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		httpErr(w, fmt.Sprintf("invalid payload: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	nodeID := config.NodeID()
-	log.Printf("[HTTP] Received /assimilate for node %s", nodeID)
+	id := config.NodeID()
+	env := fmt.Sprintf("HOSTNAME=%s\nTAILSCALE_IP=%s\nETCD_NAME=%s\nETCD_INITIAL_CLUSTER=%s\nETCD_INITIAL_CLUSTER_STATE=existing\n",
+		id, p.AssignedIP, id, p.EtcdInitialCluster)
 
-	envFile := fmt.Sprintf("%s/.env", config.BootstrapDir)
-	envContent := fmt.Sprintf(
-		"HOSTNAME=%s\nTAILSCALE_IP=%s\nETCD_NAME=%s\nETCD_INITIAL_CLUSTER=%s\nETCD_INITIAL_CLUSTER_STATE=existing\n",
-		nodeID,
-		payload.AssignedIP,
-		nodeID,
-		payload.EtcdInitialCluster,
-	)
-
-	if err := os.WriteFile(envFile, []byte(envContent), 0644); err != nil {
-		http.Error(w, "failed to update configuration", http.StatusInternalServerError)
+	if err := os.WriteFile(config.BootstrapDir+"/.env", []byte(env), 0644); err != nil {
+		httpErr(w, "config write failed", http.StatusInternalServerError)
 		return
 	}
 
-	_, _ = runDockerCompose(r.Context(), "down", "etcd", "--volumes", "--remove-orphans")
-
-	if _, err := runDockerCompose(r.Context(), "up", "-d", "etcd"); err != nil {
-		http.Error(w, fmt.Sprintf("failed to start etcd container: %v", err), http.StatusInternalServerError)
+	_, _ = runCompose(r.Context(), "down", "etcd", "--volumes", "--remove-orphans")
+	if _, err := runCompose(r.Context(), "up", "-d", "etcd"); err != nil {
+		httpErr(w, fmt.Sprintf("etcd start failed: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	var ready bool
-	for i := 0; i < config.EtcdSocketPollAttempts; i++ {
-		conn, err := net.DialTimeout("tcp", config.EtcdDialSocket, config.EtcdSocketPollInterval)
-		if err == nil {
-			_ = conn.Close()
-			ready = true
-			break
+	for i := 0; i < config.StartupRetries; i++ {
+		if c, err := net.DialTimeout("tcp", config.EtcdEndpoint, config.StartupInterval); err == nil {
+			_ = c.Close()
+			w.Write([]byte("Learner ready.\n"))
+			return
 		}
-
 		select {
 		case <-r.Context().Done():
-			http.Error(w, "request cancelled", http.StatusRequestTimeout)
+			httpErr(w, "timeout", http.StatusRequestTimeout)
 			return
-		case <-time.After(config.EtcdSocketPollInterval):
+		case <-time.After(config.StartupInterval):
 		}
 	}
-
-	if !ready {
-		http.Error(w, "etcd socket timeout", http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("Learner container ready.\n"))
+	httpErr(w, "etcd socket timeout", http.StatusInternalServerError)
 }
 
 func (s *HttpServer) handleActivate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		httpErr(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	nodeID := config.NodeID()
-	log.Printf("[HTTP] Received /activate request for node %s. Connecting gRPC client...", nodeID)
-
-	cli, err := s.connectEtcdClient(r.Context())
+	cli, err := s.connectEtcd(r.Context())
 	if err != nil {
-		log.Printf("[HTTP] Failed to connect to gRPC post-promotion: %v", err)
-		http.Error(w, "gRPC connection failed", http.StatusInternalServerError)
+		httpErr(w, "etcd connect failed", http.StatusInternalServerError)
 		return
 	}
 
-	if err := s.startMemberRole(cli); err != nil {
-		log.Printf("[HTTP] %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := s.startMember(cli); err != nil {
+		httpErr(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(fmt.Sprintf("Node %s activated as active Voter member.\n", nodeID)))
+	fmt.Fprintf(w, "Node %s activated.\n", config.NodeID())
 }
 
-func runDockerCompose(ctx context.Context, args ...string) ([]byte, error) {
-	cmdArgs := append([]string{"compose"}, args...)
-	cmd := exec.CommandContext(ctx, "docker", cmdArgs...)
+func runCompose(ctx context.Context, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "docker", append([]string{"compose"}, args...)...)
 	cmd.Dir = config.BootstrapDir
-
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return out, fmt.Errorf("docker compose %s failed: %w (output: %s)", strings.Join(args, " "), err, string(out))
+		return out, fmt.Errorf("docker compose %s: %w (%s)", strings.Join(args, " "), err, out)
 	}
 	return out, nil
 }
 
-func (s *HttpServer) connectEtcdClient(ctx context.Context) (*clientv3.Client, error) {
-	var cli *clientv3.Client
-	var err error
-
-	for i := 0; i < config.EtcdConnectRetryAttempts; i++ {
-		cli, err = clientv3.New(clientv3.Config{
-			Endpoints:   []string{config.EtcdGRPCEndpoint},
-			DialTimeout: config.EtcdDialTimeout,
+func (s *HttpServer) connectEtcd(ctx context.Context) (*clientv3.Client, error) {
+	for i := 0; i < config.StartupRetries; i++ {
+		cli, err := clientv3.New(clientv3.Config{
+			Endpoints:   []string{config.EtcdEndpoint},
+			DialTimeout: config.Timeout,
 		})
 		if err == nil {
-			statusCtx, cancel := context.WithTimeout(ctx, config.EtcdStatusTimeout)
-			_, err = cli.Status(statusCtx, config.EtcdGRPCEndpoint)
+			sCtx, cancel := context.WithTimeout(ctx, config.Timeout)
+			_, err = cli.Status(sCtx, config.EtcdEndpoint)
 			cancel()
 			if err == nil {
 				return cli, nil
 			}
 			cli.Close()
 		}
-
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(config.EtcdConnectRetryInterval):
+		case <-time.After(config.StartupRetries):
 		}
 	}
-
-	return nil, fmt.Errorf("failed to establish healthy etcd gRPC connection after retries: %w", err)
+	return nil, fmt.Errorf("etcd connection failed after retries")
 }
 
-func (s *HttpServer) startMemberRole(cli *clientv3.Client) error {
-	s.store = adapters.NewStore(cli)
-	log.Println("[HTTP] etcd store successfully bound to controller!")
-
-	s.registry.SetStore(s.store)
-
-	nodeID := config.NodeID()
-	memberAsg := roles.NewMemberAssignment(nodeID)
-
-	log.Println("[HTTP] Transitioning node into active Member role...")
-	if err := s.registry.Start(s.appCtx, memberAsg, nil); err != nil {
-		return fmt.Errorf("failed to start member role: %w", err)
-	}
-
-	return nil
+func (s *HttpServer) startMember(cli *clientv3.Client) error {
+	s.str = adapters.NewStore(cli)
+	s.reg.SetStore(s.str)
+	id := config.NodeID()
+	return s.reg.Start(s.ctx, &models.Assignment{NodeID: id, ID: "member-" + id, Role: "member"}, nil)
 }

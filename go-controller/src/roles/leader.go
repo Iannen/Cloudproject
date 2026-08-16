@@ -6,118 +6,98 @@ import (
 	"log"
 	"time"
 
-	"cloud-controller/src/adapters"
 	"cloud-controller/src/config"
 	"cloud-controller/src/models"
+
+	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
 type LeaderStore interface {
 	GetActiveNodeIDs(ctx context.Context) ([]string, error)
 	GetAllAssignments(ctx context.Context) ([]models.Assignment, error)
-	CreateAssignment(ctx context.Context, assignment models.Assignment) error
+	CreateAssignment(ctx context.Context, a models.Assignment) error
 }
 
-type LeaderRole struct {
-	store LeaderStore
-}
+type LeaderRole struct{ store LeaderStore }
 
-func (l *LeaderRole) Run(ctx context.Context, asg *models.Assignment, sess adapters.SessionWrapper) error {
-	ticker := time.NewTicker(config.LeaderReconcileInterval)
-	defer ticker.Stop()
+func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment, s *concurrency.Session) error {
+	tk := time.NewTicker(config.ReconcileInterval)
+	defer tk.Stop()
 
-	log.Printf("[Leader] Node %s acting as leader for %s. Lease ID: %d", asg.NodeID, asg.ID, sess.LeaseID())
-
+	log.Printf("[Leader] Active on %s (%s)", a.NodeID, a.ID)
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("[Leader] Role assignment stopped")
 			return nil
-		case <-ticker.C:
-			reconcileCluster(ctx, l.store)
+		case <-tk.C:
+			reconcile(ctx, l.store)
 		}
 	}
 }
 
-func reconcileCluster(ctx context.Context, store LeaderStore) {
-	activeNodes, err := store.GetActiveNodeIDs(ctx)
-	if err != nil || len(activeNodes) == 0 {
-		log.Printf("[Leader] Cannot reconcile: no active nodes found or etcd error: %v", err)
-		return
-	}
-
-	existingAssignments, err := store.GetAllAssignments(ctx)
+func reconcile(ctx context.Context, str LeaderStore) {
+	nodes, err := str.GetActiveNodeIDs(ctx)
 	if err != nil {
-		log.Printf("[Leader] Failed to fetch existing assignments: %v", err)
+		log.Printf("[Leader] Failed to fetch active nodes from etcd: %v", err)
+		return
+	}
+	if len(nodes) == 0 {
 		return
 	}
 
-	activeAssignmentsByRole := make(map[string][]models.Assignment)
-	for _, asg := range existingAssignments {
-		if isNodeActive(asg.NodeID, activeNodes) {
-			activeAssignmentsByRole[asg.Role] = append(activeAssignmentsByRole[asg.Role], asg)
+	active := make(map[string]bool, len(nodes))
+	for _, n := range nodes {
+		active[n] = true
+	}
+
+	asgs, err := str.GetAllAssignments(ctx)
+	if err != nil {
+		log.Printf("[Leader] Failed to fetch existing assignments from etcd: %v", err)
+		return
+	}
+
+	byRole := make(map[string][]models.Assignment)
+	for _, a := range asgs {
+		if active[a.NodeID] {
+			byRole[a.Role] = append(byRole[a.Role], a)
 		}
 	}
 
-	for _, roleSpec := range config.ClusterSpec {
-		currentSupply := len(activeAssignmentsByRole[roleSpec.Name])
-		demand := roleSpec.Replicas
+	for _, spec := range config.ClusterSpec {
+		curr := byRole[spec.Name]
+		missing := spec.Replicas - len(curr)
 
-		log.Printf("[Leader] Role '%s': Supply=%d, Demand=%d", roleSpec.Name, currentSupply, demand)
+		for i := 0; i < missing; i++ {
+			node := pickNode(nodes, curr)
+			if node == "" {
+				log.Printf("[Leader] No suitable node available for role %s", spec.Name)
+				break
+			}
 
-		if currentSupply < demand {
-			missing := demand - currentSupply
-			log.Printf("[Leader] Need to schedule %d missing replica(s) for role '%s'", missing, roleSpec.Name)
-
-			for i := 0; i < missing; i++ {
-				targetNode := pickTargetNode(activeNodes, activeAssignmentsByRole[roleSpec.Name])
-				if targetNode == "" {
-					log.Printf("[Leader] No suitable node found for role %s", roleSpec.Name)
-					break
-				}
-
-				newAsg := models.Assignment{
-					ID:     fmt.Sprintf("%s-%s-%d", roleSpec.Name, targetNode, time.Now().UnixNano()%10000),
-					NodeID: targetNode,
-					Role:   roleSpec.Name,
-				}
-
-				log.Printf("[Leader] Creating assignment %s for node %s", newAsg.ID, targetNode)
-				if err := store.CreateAssignment(ctx, newAsg); err != nil {
-					log.Printf("[Leader] Failed to write assignment to etcd: %v", err)
-				}
+			id := fmt.Sprintf("%s-%s-%d", spec.Name, node, time.Now().UnixNano()%10000)
+			if err := str.CreateAssignment(ctx, models.Assignment{ID: id, NodeID: node, Role: spec.Name}); err != nil {
+				log.Printf("[Leader] Assign fail %s->%s: %v", spec.Name, node, err)
+			} else {
+				log.Printf("[Leader] Assigned %s to %s", id, node)
 			}
 		}
 	}
 }
 
-func isNodeActive(nodeID string, activeNodes []string) bool {
-	for _, id := range activeNodes {
-		if id == nodeID {
-			return true
-		}
-	}
-	return false
-}
-
-func pickTargetNode(activeNodes []string, existing []models.Assignment) string {
-	if len(activeNodes) == 0 {
+func pickNode(nodes []string, existing []models.Assignment) string {
+	if len(nodes) == 0 {
 		return ""
 	}
-
-	counts := make(map[string]int)
-	for _, asg := range existing {
-		counts[asg.NodeID]++
+	counts := make(map[string]int, len(nodes))
+	for _, a := range existing {
+		counts[a.NodeID]++
 	}
 
-	bestNode := activeNodes[0]
-	minCount := counts[bestNode]
-
-	for _, node := range activeNodes {
-		if counts[node] < minCount {
-			minCount = counts[node]
-			bestNode = node
+	best, min := nodes[0], counts[nodes[0]]
+	for _, n := range nodes[1:] {
+		if c := counts[n]; c < min {
+			best, min = n, c
 		}
 	}
-
-	return bestNode
+	return best
 }

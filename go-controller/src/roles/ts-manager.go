@@ -12,223 +12,192 @@ import (
 	"strings"
 	"time"
 
-	"cloud-controller/src/adapters"
 	"cloud-controller/src/config"
 	"cloud-controller/src/models"
+
+	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
 type TsManagerStore interface {
-	GetActiveNodeIDs(ctx context.Context) ([]string, error)
+	GetClusterMembers(ctx context.Context) ([]models.MemberInfo, error)
 	AddLearner(ctx context.Context, peerURL string) (*models.MemberInfo, []models.MemberInfo, error)
 	PromoteMember(ctx context.Context, memberID uint64) error
 	RemoveMember(ctx context.Context, memberID uint64) error
 }
 
-type TailscaleManagerRole struct {
-	store      TsManagerStore
-	httpClient *http.Client
+type TSMgr struct {
+	str TsManagerStore
+	cli *http.Client
 }
 
-type TailscaleStatus struct {
-	Peer map[string]*TailscalePeer `json:"Peer"`
-	Self *TailscalePeer            `json:"Self"`
-}
-
-type TailscalePeer struct {
+type TSPeer struct {
 	HostName     string   `json:"HostName"`
 	TailscaleIPs []string `json:"TailscaleIPs"`
 	Online       bool     `json:"Online"`
 }
 
-func (t *TailscaleManagerRole) Run(ctx context.Context, asg *models.Assignment, sess adapters.SessionWrapper) error {
-	ticker := time.NewTicker(config.TSManagerPollInterval)
-	defer ticker.Stop()
+type TSStatus struct {
+	Peer map[string]*TSPeer `json:"Peer"`
+	Self *TSPeer            `json:"Self"`
+}
 
-	log.Printf("[TailscaleManager] Started on node %s for assignment %s", asg.NodeID, asg.ID)
+func (t *TSMgr) Run(ctx context.Context, a *models.Assignment, s *concurrency.Session) error {
+	tk := time.NewTicker(config.ReconcileInterval)
+	defer tk.Stop()
 
+	log.Printf("[TSMgr] Started: %s on %s", a.ID, a.NodeID)
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("[TailscaleManager] Stopping manager assignment %s", asg.ID)
 			return nil
-		case <-ticker.C:
-			t.reconcileTailnet(ctx)
+		case <-tk.C:
+			t.reconcile(ctx)
 		}
 	}
 }
 
-func (t *TailscaleManagerRole) reconcileTailnet(ctx context.Context) {
-	activeMembers, err := t.store.GetActiveNodeIDs(ctx)
+func (t *TSMgr) reconcile(ctx context.Context) {
+	members, err := t.str.GetClusterMembers(ctx)
 	if err != nil {
-		log.Printf("[TailscaleManager] Failed to get active members: %v", err)
-		return
-	}
-	memberSet := make(map[string]bool)
-	for _, id := range activeMembers {
-		memberSet[id] = true
-	}
-
-	peers, err := t.getTailscalePeers(ctx)
-	if err != nil {
-		log.Printf("[TailscaleManager] Failed to discover tailscale peers: %v", err)
+		log.Printf("[TSMgr] Cluster member lookup failed: %v", err)
 		return
 	}
 
-	for _, peer := range peers {
-		if !peer.Online || len(peer.TailscaleIPs) == 0 {
-			continue
+	seenIPs := make(map[string]bool)
+	for _, m := range members {
+		for _, u := range m.PeerURLs {
+			seenIPs[u] = true
 		}
-		if !strings.HasPrefix(peer.HostName, config.NodeNamePrefix) {
+	}
+
+	peers, err := t.peers(ctx)
+	if err != nil {
+		log.Printf("[TSMgr] Peer discovery failed: %v", err)
+		return
+	}
+
+	for _, p := range peers {
+		if !p.Online || len(p.TailscaleIPs) == 0 || !strings.HasPrefix(p.HostName, config.NodeNamePrefix) {
 			continue
 		}
 
-		if !memberSet[peer.HostName] {
-			log.Printf("[TailscaleManager] Found non-member candidate: %s (IP: %s)", peer.HostName, peer.TailscaleIPs[0])
-			t.assimilateNode(ctx, peer)
+		peerURL := fmt.Sprintf("http://%s:%d", p.TailscaleIPs[0], config.EtcdPeerPort)
+		if seenIPs[peerURL] {
+			continue
 		}
+
+		t.assimilate(ctx, p)
 	}
 }
 
-func (t *TailscaleManagerRole) getTailscalePeers(ctx context.Context) ([]*TailscalePeer, error) {
+func (t *TSMgr) peers(ctx context.Context) ([]*TSPeer, error) {
 	out, err := exec.CommandContext(ctx, "tailscale", "status", "--json").Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to run tailscale status: %w", err)
+		return nil, fmt.Errorf("tailscale status: %w", err)
 	}
 
-	var status TailscaleStatus
-	if err := json.Unmarshal(out, &status); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal tailscale status: %w", err)
+	var st TSStatus
+	if err := json.Unmarshal(out, &st); err != nil {
+		return nil, fmt.Errorf("unmarshal status: %w", err)
 	}
 
-	var peers []*TailscalePeer
-	if status.Self != nil {
-		peers = append(peers, status.Self)
+	res := make([]*TSPeer, 0, len(st.Peer)+1)
+	if st.Self != nil {
+		res = append(res, st.Self)
 	}
-	for _, peer := range status.Peer {
-		peers = append(peers, peer)
+	for _, p := range st.Peer {
+		res = append(res, p)
 	}
-	return peers, nil
+	return res, nil
 }
 
-func (t *TailscaleManagerRole) assimilateNode(ctx context.Context, peer *TailscalePeer) {
-	targetIP := peer.TailscaleIPs[0]
-	targetPeerURL := fmt.Sprintf("http://%s:%d", targetIP, config.EtcdPeerPort)
-
-	localIP, err := t.getLocalTailscaleIP(ctx)
+func (t *TSMgr) assimilate(ctx context.Context, p *TSPeer) {
+	ip := p.TailscaleIPs[0]
+	locIP, err := t.localIP(ctx)
 	if err != nil {
-		log.Printf("[TailscaleManager] Failed to resolve local Tailscale IP: %v", err)
+		log.Printf("[TSMgr] Local IP lookup failed: %v", err)
 		return
 	}
 
-	newLearner, currentMembers, err := t.store.AddLearner(ctx, targetPeerURL)
+	l, mems, err := t.str.AddLearner(ctx, fmt.Sprintf("http://%s:%d", ip, config.EtcdPeerPort))
 	if err != nil {
-		log.Printf("[TailscaleManager] Failed to register learner %s: %v", peer.HostName, err)
+		log.Printf("[TSMgr] Add learner %s failed: %v", p.HostName, err)
 		return
 	}
 
-	learnerID := newLearner.ID
+	lid := l.ID
 	defer func() {
-		if learnerID != 0 {
-			log.Printf("[TailscaleManager] Evicting unintegrated learner %x...", learnerID)
-			_ = t.store.RemoveMember(context.Background(), learnerID)
+		if lid != 0 {
+			_ = t.str.RemoveMember(context.Background(), lid)
 		}
 	}()
 
-	var clusterTokens []string
-	for _, m := range currentMembers {
-		name := m.Name
-		if name == "" {
-			name = peer.HostName
+	toks := make([]string, 0, len(mems))
+	for _, m := range mems {
+		n := m.Name
+		if n == "" {
+			n = p.HostName
 		}
 		if len(m.PeerURLs) > 0 {
-			clusterTokens = append(clusterTokens, fmt.Sprintf("%s=%s", name, m.PeerURLs[0]))
+			toks = append(toks, fmt.Sprintf("%s=%s", n, m.PeerURLs[0]))
 		}
 	}
 
-	payload := models.AssimilatePayload{
+	b, _ := json.Marshal(models.AssimilatePayload{
 		LeaderName:         config.NodeID(),
-		LeaderPeerURL:      fmt.Sprintf("http://%s:2380", localIP),
-		EtcdInitialCluster: strings.Join(clusterTokens, ","),
-		AssignedIP:         targetIP,
-	}
+		LeaderPeerURL:      fmt.Sprintf("http://%s:2380", locIP),
+		EtcdInitialCluster: strings.Join(toks, ","),
+		AssignedIP:         ip,
+	})
 
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		log.Printf("[TailscaleManager] Failed to marshal payload for %s: %v", peer.HostName, err)
-		return
-	}
-
-	log.Printf("[TailscaleManager] Step 1: Posting /assimilate payload to %s...", peer.HostName)
-	assimilateURL := fmt.Sprintf("http://%s:8080/assimilate", targetIP)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, assimilateURL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		log.Printf("[TailscaleManager] Failed to build request for %s: %v", peer.HostName, err)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := t.httpClient.Do(req)
-	if err != nil {
-		log.Printf("[TailscaleManager] Assimilate call failed for %s (%s): %v", peer.HostName, targetIP, err)
-		return
-	}
-	_ = resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("[TailscaleManager] /assimilate on %s returned status: %d", peer.HostName, resp.StatusCode)
+	if !t.post(ctx, fmt.Sprintf("http://%s:8080/assimilate", ip), b) {
+		log.Printf("[TSMgr] Assimilate call failed for %s", p.HostName)
 		return
 	}
 
 	time.Sleep(2 * time.Second)
 
-	log.Printf("[TailscaleManager] Step 2: Promoting %s (%x) to full voter status...", peer.HostName, learnerID)
-	if err := t.store.PromoteMember(ctx, learnerID); err != nil {
-		log.Printf("[TailscaleManager] Failed to promote member %s: %v", peer.HostName, err)
+	if err := t.str.PromoteMember(ctx, lid); err != nil {
+		log.Printf("[TSMgr] Promote %s failed: %v", p.HostName, err)
+		return
+	}
+	lid = 0
+
+	if !t.post(ctx, fmt.Sprintf("http://%s:8080/activate", ip), nil) {
+		log.Printf("[TSMgr] Activate call failed for %s", p.HostName)
 		return
 	}
 
-	learnerID = 0
-
-	log.Printf("[TailscaleManager] Step 3: Posting /activate payload to %s...", peer.HostName)
-	activateURL := fmt.Sprintf("http://%s:8080/activate", targetIP)
-
-	actReq, err := http.NewRequestWithContext(ctx, http.MethodPost, activateURL, nil)
-	if err != nil {
-		log.Printf("[TailscaleManager] Failed to build activate request for %s: %v", peer.HostName, err)
-		return
-	}
-
-	actResp, err := t.httpClient.Do(actReq)
-	if err != nil {
-		log.Printf("[TailscaleManager] Activate call failed for %s (%s): %v", peer.HostName, targetIP, err)
-		return
-	}
-	_ = actResp.Body.Close()
-
-	if actResp.StatusCode != http.StatusOK {
-		log.Printf("[TailscaleManager] /activate on %s returned status: %d", peer.HostName, actResp.StatusCode)
-		return
-	}
-
-	log.Printf("[TailscaleManager] Successfully assimilated and activated %s into the cluster!", peer.HostName)
+	log.Printf("[TSMgr] Successfully assimilated and activated %s", p.HostName)
 }
 
-func (t *TailscaleManagerRole) getLocalTailscaleIP(ctx context.Context) (string, error) {
+func (t *TSMgr) post(ctx context.Context, url string, body []byte) bool {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return false
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	res, err := t.cli.Do(req)
+	if err != nil {
+		return false
+	}
+	_ = res.Body.Close()
+	return res.StatusCode == http.StatusOK
+}
+
+func (t *TSMgr) localIP(ctx context.Context) (string, error) {
 	if ip := os.Getenv("TAILSCALE_IP"); ip != "" {
 		return ip, nil
 	}
-
-	cmd := exec.CommandContext(ctx, "tailscale", "ip", "-4")
-	out, err := cmd.Output()
+	out, err := exec.CommandContext(ctx, "tailscale", "ip", "-4").Output()
 	if err != nil {
-		return "", fmt.Errorf("failed to execute 'tailscale ip -4': %w", err)
+		return "", err
 	}
-
 	ip := strings.TrimSpace(string(out))
 	if ip == "" {
-		return "", fmt.Errorf("tailscale returned an empty IP address")
+		return "", fmt.Errorf("empty tailscale ip")
 	}
-
 	return ip, nil
 }

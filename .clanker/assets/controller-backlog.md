@@ -6,18 +6,28 @@ II. Medium term goals
         - Move hardcoded key prefix strings (e.g., "heartbeats/nodes/", "assignments/definitions/") into config constants
         - Move operational timeouts, ticker intervals, and retry durations across roles/infra into central config constants
         - Centralize default host directory paths, etcd/HTTP ports, and node naming prefix filters ("kaffcloud")
-    - [ ] Store Interface Consolidation
-        - Unify single-purpose store interfaces (LeaderStore, MemberStore, TsManagerStore) into a single ClusterStore interface
-        - Simplify factory function signatures and remove redundant interface assertions across role implementations
-    - [ ] Streamline Member Reconciliation Loop
-        - Extract event listening and ticker creation logic from MemberRole.Run into dedicated helper functions
-        - Refactor watch channel reconnect logic to use context-cancelled loops, eliminating goto statements
-    - [x] HTTP and Container Helper Refactoring
-        - Extract a shared connectEtcdClient helper to remove repetitive gRPC connection retries in infra/server.go
-        - Extract a runDockerCompose utility function to standardize Docker command execution across HTTP handlers
-    - [ ] Assimilation Workflow Simplification
-        - Extract a generic postJSON helper function to handle boilerplate HTTP calls in roles/ts-manager.go
-        - Refactor assimilateNode into sequential, single-responsibility helper functions
+
+- [ ] Eliminating EtcdSession & SessionWrapper in codebase
+        - [ ] go-controller/src/adapters/etcd-store.go
+            - Delete SessionWrapper interface, EtcdSession struct, and its methods (Done, Close, LeaseID).
+            - Change return type of NewSession to (*concurrency.Session, error).
+            - Update PutWithSession and TryClaimLeadership parameters from SessionWrapper to *concurrency.Session.
+        - [ ] go-controller/src/roles/member.go
+            - Update MemberStore interface methods (NewSession, PutWithSession, TryClaimLeadership) to accept/return *concurrency.Session.
+            - Update MemberRole.Run method signature to accept sess *concurrency.Session.
+        - [ ] go-controller/src/roles/registry.go
+            - Update RoleRunner interface method signature Run to accept sess *concurrency.Session.
+        - [ ] go-controller/src/roles/leader.go
+            - Update LeaderRole.Run method signature to accept sess *concurrency.Session.
+        - [ ] go-controller/src/roles/ts-manager.go
+            - Update TailscaleManagerRole.Run method signature to accept sess *concurrency.Session.
+        - [ ] go-controller/src/roles/runtime.go
+            - Update AssignmentRuntime.Start method signature to accept sess *concurrency.Session.
+
+- [ ] Fix prompt MD file for smoother exp.
+        - sick of getting BL items not in copybox
+        - sick of inline comments.
+        - gotta enforce code hygiene
 
 III. Immediate Goals
 

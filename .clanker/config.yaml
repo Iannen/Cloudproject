@@ -45,6 +45,11 @@ domains:
     template: prompt_template
     resolvers:
     - {id: repo_content, type: repo_content, includes: [controller], sorting: normal}
+  - name: debloat
+    template: prompt_template
+    resolvers:
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [debloat-instructions.md]}
+    - {id: repo_content, type: repo_content, includes: [go-controller/src], sorting: normal}
 
 - name: pm
   plan: {name: proxmox_vm_factory_plan}

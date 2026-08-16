@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"cloud-controller/src/config"
 	"cloud-controller/src/models"
@@ -13,152 +12,120 @@ import (
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
-type SessionWrapper interface {
-	Done() <-chan struct{}
-	Close() error
-	LeaseID() int64
-}
-
-type EtcdSession struct {
-	sess *concurrency.Session
-}
-
-func (es *EtcdSession) Done() <-chan struct{} { return es.sess.Done() }
-func (es *EtcdSession) Close() error          { return es.sess.Close() }
-func (es *EtcdSession) LeaseID() int64        { return int64(es.sess.Lease()) }
-
 type Store struct {
 	cli *clientv3.Client
 }
 
-func NewStore(cli *clientv3.Client) *Store {
-	return &Store{cli: cli}
-}
+func NewStore(cli *clientv3.Client) *Store { return &Store{cli: cli} }
 
-func (s *Store) CreateAssignment(ctx context.Context, assignment models.Assignment) error {
-	asgJSON, err := json.Marshal(assignment)
+func (s *Store) CreateAssignment(ctx context.Context, a models.Assignment) error {
+	b, err := json.Marshal(a)
 	if err != nil {
-		return fmt.Errorf("failed to marshal assignment definition: %w", err)
+		return fmt.Errorf("marshal asg: %w", err)
 	}
 
-	defKey := config.AssignmentDefinitionPath(assignment.ID)
-	nodeKey := config.NodeAssignmentsPath(assignment.NodeID)
-
-	existingIDs, _, err := s.GetNodeAssignmentsWithRev(ctx, assignment.NodeID)
+	ids, _, err := s.NodeAssignments(ctx, a.NodeID)
 	if err != nil {
-		return fmt.Errorf("failed to get existing node assignments: %w", err)
+		return fmt.Errorf("get node asgs: %w", err)
 	}
 
-	alreadyExists := false
-	for _, id := range existingIDs {
-		if id == assignment.ID {
-			alreadyExists = true
+	exists := false
+	for _, id := range ids {
+		if id == a.ID {
+			exists = true
 			break
 		}
 	}
-
-	if !alreadyExists {
-		existingIDs = append(existingIDs, assignment.ID)
+	if !exists {
+		ids = append(ids, a.ID)
 	}
 
-	idsJSON, err := json.Marshal(existingIDs)
+	idsB, err := json.Marshal(ids)
 	if err != nil {
-		return fmt.Errorf("failed to marshal node assignments list: %w", err)
+		return fmt.Errorf("marshal ids: %w", err)
 	}
 
 	_, err = s.cli.Txn(ctx).Then(
-		clientv3.OpPut(defKey, string(asgJSON)),
-		clientv3.OpPut(nodeKey, string(idsJSON)),
+		clientv3.OpPut(config.AsgDefPath(a.ID), string(b)),
+		clientv3.OpPut(config.NodeAssignmentsPath(a.NodeID), string(idsB)),
 	).Commit()
 	if err != nil {
-		return fmt.Errorf("etcd transaction failed: %w", err)
+		return fmt.Errorf("etcd txn: %w", err)
 	}
-
 	return nil
 }
 
-func (s *Store) NewSession(ctx context.Context, ttl int64) (SessionWrapper, error) {
-	sess, err := concurrency.NewSession(s.cli, concurrency.WithTTL(int(ttl)))
-	if err != nil {
-		return nil, err
-	}
-	return &EtcdSession{sess: sess}, nil
+func (s *Store) NewSession(ctx context.Context, ttl int64) (*concurrency.Session, error) {
+	return concurrency.NewSession(s.cli, concurrency.WithTTL(int(ttl)))
 }
 
-func (s *Store) PutWithSession(ctx context.Context, sess SessionWrapper, key string, value string) error {
-	_, err := s.cli.Put(ctx, key, value, clientv3.WithLease(clientv3.LeaseID(sess.LeaseID())))
+func (s *Store) PutWithSession(ctx context.Context, sess *concurrency.Session, key, val string) error {
+	_, err := s.cli.Put(ctx, key, val, clientv3.WithLease(sess.Lease()))
 	return err
 }
 
-func (s *Store) GetAssignmentDefinition(ctx context.Context, assignmentID string) (*models.Assignment, error) {
-	key := config.AssignmentDefinitionPath(assignmentID)
-	resp, err := s.cli.Get(ctx, key)
+func (s *Store) AssignmentDef(ctx context.Context, id string) (*models.Assignment, error) {
+	resp, err := s.cli.Get(ctx, config.AsgDefPath(id))
 	if err != nil {
 		return nil, err
 	}
 	if len(resp.Kvs) == 0 {
-		return nil, fmt.Errorf("assignment definition not found: %s", assignmentID)
+		return nil, fmt.Errorf("asg not found: %s", id)
 	}
-	var asg models.Assignment
-	if err := json.Unmarshal(resp.Kvs[0].Value, &asg); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal assignment definition: %w", err)
+	var a models.Assignment
+	if err := json.Unmarshal(resp.Kvs[0].Value, &a); err != nil {
+		return nil, fmt.Errorf("unmarshal asg: %w", err)
 	}
-	return &asg, nil
+	return &a, nil
 }
 
-func (s *Store) WatchNodeAssignmentsFromRev(ctx context.Context, nodeID string, rev int64) clientv3.WatchChan {
-	key := config.NodeAssignmentsPath(nodeID)
-	return s.cli.Watch(ctx, key, clientv3.WithRev(rev))
+func (s *Store) WatchAssignments(ctx context.Context, nodeID string, rev int64) clientv3.WatchChan {
+	return s.cli.Watch(ctx, config.NodeAssignmentsPath(nodeID), clientv3.WithRev(rev))
 }
 
-func (s *Store) GetNodeAssignmentsWithRev(ctx context.Context, nodeID string) ([]string, int64, error) {
-	key := config.NodeAssignmentsPath(nodeID)
-	resp, err := s.cli.Get(ctx, key)
+func (s *Store) NodeAssignments(ctx context.Context, nodeID string) ([]string, int64, error) {
+	resp, err := s.cli.Get(ctx, config.NodeAssignmentsPath(nodeID))
 	if err != nil {
 		return nil, 0, err
 	}
-	revision := resp.Header.Revision
+	rev := resp.Header.Revision
 	if len(resp.Kvs) == 0 {
-		return nil, revision, nil
+		return nil, rev, nil
 	}
 	var ids []string
 	if err := json.Unmarshal(resp.Kvs[0].Value, &ids); err != nil {
-		return nil, revision, fmt.Errorf("failed to unmarshal node assignments: %w", err)
+		return nil, rev, fmt.Errorf("unmarshal node asgs: %w", err)
 	}
-	return ids, revision, nil
+	return ids, rev, nil
 }
 
-func (s *Store) TryClaimLeadership(ctx context.Context, sess SessionWrapper, nodeID string) (bool, error) {
-	leaderKey := config.ClusterLeaderKey
-
-	cond := clientv3.Compare(clientv3.CreateRevision(leaderKey), "=", 0)
-	thenOp := clientv3.OpPut(leaderKey, nodeID, clientv3.WithLease(clientv3.LeaseID(sess.LeaseID())))
-	elseOp := clientv3.OpGet(leaderKey)
-
-	txnResp, err := s.cli.Txn(ctx).If(cond).Then(thenOp).Else(elseOp).Commit()
+func (s *Store) ClaimLeader(ctx context.Context, sess *concurrency.Session, nodeID string) (bool, error) {
+	key := config.ClusterLeaderKey
+	resp, err := s.cli.Txn(ctx).
+		If(clientv3.Compare(clientv3.CreateRevision(key), "=", 0)).
+		Then(clientv3.OpPut(key, nodeID, clientv3.WithLease(sess.Lease()))).
+		Else(clientv3.OpGet(key)).
+		Commit()
 	if err != nil {
-		return false, fmt.Errorf("leader election transaction failed: %w", err)
+		return false, fmt.Errorf("leader election txn: %w", err)
 	}
-
-	return txnResp.Succeeded, nil
+	return resp.Succeeded, nil
 }
 
-func (s *Store) WatchLeaderKey(ctx context.Context, notifyChan chan<- struct{}) {
-	leaderKey := config.ClusterLeaderKey
-	watchChan := s.cli.Watch(ctx, leaderKey)
-
+func (s *Store) WatchLeaderKey(ctx context.Context, ch chan<- struct{}) {
+	chWatch := s.cli.Watch(ctx, config.ClusterLeaderKey)
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case resp, ok := <-watchChan:
+		case resp, ok := <-chWatch:
 			if !ok {
 				return
 			}
 			for _, ev := range resp.Events {
 				if ev.Type == clientv3.EventTypeDelete {
 					select {
-					case notifyChan <- struct{}{}:
+					case ch <- struct{}{}:
 					default:
 					}
 					return
@@ -169,74 +136,69 @@ func (s *Store) WatchLeaderKey(ctx context.Context, notifyChan chan<- struct{}) 
 }
 
 func (s *Store) GetActiveNodeIDs(ctx context.Context) ([]string, error) {
-	resp, err := s.cli.Get(ctx, config.PrefixHeartbeatsNodes, clientv3.WithPrefix())
+	resp, err := s.cli.Get(ctx, config.PrefixHeartbeats, clientv3.WithPrefix())
 	if err != nil {
 		return nil, err
 	}
-
-	var nodeIDs []string
+	var ids []string
 	for _, kv := range resp.Kvs {
-		key := string(kv.Key)
-		nodeID := strings.TrimPrefix(key, config.PrefixHeartbeatsNodes)
-		if nodeID != "" {
-			nodeIDs = append(nodeIDs, nodeID)
+		if id := string(kv.Key[len(config.PrefixHeartbeats):]); id != "" {
+			ids = append(ids, id)
 		}
 	}
-	return nodeIDs, nil
+	return ids, nil
 }
 
 func (s *Store) GetAllAssignments(ctx context.Context) ([]models.Assignment, error) {
-	resp, err := s.cli.Get(ctx, config.PrefixAssignmentsDefs, clientv3.WithPrefix())
+	resp, err := s.cli.Get(ctx, config.PrefixDefs, clientv3.WithPrefix())
 	if err != nil {
 		return nil, err
 	}
-
-	var assignments []models.Assignment
+	var asgs []models.Assignment
 	for _, kv := range resp.Kvs {
-		var asg models.Assignment
-		if err := json.Unmarshal(kv.Value, &asg); err == nil {
-			assignments = append(assignments, asg)
+		var a models.Assignment
+		if err := json.Unmarshal(kv.Value, &a); err == nil {
+			asgs = append(asgs, a)
 		}
 	}
-	return assignments, nil
+	return asgs, nil
 }
 
 func (s *Store) AddLearner(ctx context.Context, peerURL string) (*models.MemberInfo, []models.MemberInfo, error) {
 	resp, err := s.cli.MemberAddAsLearner(ctx, []string{peerURL})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to add learner %s: %w", peerURL, err)
+		return nil, nil, fmt.Errorf("add learner %s: %w", peerURL, err)
 	}
-
-	newMember := &models.MemberInfo{
-		ID:       resp.Member.ID,
-		Name:     resp.Member.Name,
-		PeerURLs: resp.Member.PeerURLs,
-	}
-
-	var allMembers []models.MemberInfo
+	all := make([]models.MemberInfo, 0, len(resp.Members))
 	for _, m := range resp.Members {
-		allMembers = append(allMembers, models.MemberInfo{
+		all = append(all, models.MemberInfo{ID: m.ID, Name: m.Name, PeerURLs: m.PeerURLs})
+	}
+	return &models.MemberInfo{ID: resp.Member.ID, Name: resp.Member.Name, PeerURLs: resp.Member.PeerURLs}, all, nil
+}
+
+func (s *Store) PromoteMember(ctx context.Context, id uint64) error {
+	_, err := s.cli.MemberPromote(ctx, id)
+	return err
+}
+
+func (s *Store) RemoveMember(ctx context.Context, id uint64) error {
+	_, err := s.cli.MemberRemove(ctx, id)
+	return err
+}
+
+func (s *Store) GetClusterMembers(ctx context.Context) ([]models.MemberInfo, error) {
+	resp, err := s.cli.MemberList(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("member list: %w", err)
+	}
+
+	members := make([]models.MemberInfo, 0, len(resp.Members))
+	for _, m := range resp.Members {
+		members = append(members, models.MemberInfo{
 			ID:       m.ID,
 			Name:     m.Name,
 			PeerURLs: m.PeerURLs,
 		})
 	}
-
-	return newMember, allMembers, nil
-}
-
-func (s *Store) PromoteMember(ctx context.Context, memberID uint64) error {
-	_, err := s.cli.MemberPromote(ctx, memberID)
-	if err != nil {
-		return fmt.Errorf("failed to promote member %x: %w", memberID, err)
-	}
-	return nil
-}
-
-func (s *Store) RemoveMember(ctx context.Context, memberID uint64) error {
-	_, err := s.cli.MemberRemove(ctx, memberID)
-	if err != nil {
-		return fmt.Errorf("failed to remove member %x: %w", memberID, err)
-	}
-	return nil
+	return members, nil
 }
