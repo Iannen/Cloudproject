@@ -29,6 +29,9 @@ II. Medium term goals
         - sick of inline comments.
         - gotta enforce code hygiene
 
+- [ ] RM old pyhon controller
+        - chew on it. i think the old one is bigly superseded by go project
+
 III. Immediate Goals
 
 
