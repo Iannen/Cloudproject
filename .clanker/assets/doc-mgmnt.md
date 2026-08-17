@@ -1,0 +1,1 @@
+let us evaluate bl items. which ones are complete, and can be transferred to history?

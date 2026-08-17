@@ -34,22 +34,32 @@ domains:
 - name: controller
   plan: {name: controller_plan}
   resolvers:
-  - {id: domain_fragments, type: multi-document-retrieval, files: [
-        domain-bootstrap.md]}
+  - {id: domain_fragments, type: multi-document-retrieval, files: [controller-backlog.md]}
+  - {id: repo_content, type: repo_content, includes: [go-controller/src], sorting: normal}
   renders:
-  - name: go-controller
+  - name: plan
     template: prompt_template
     resolvers:
-    - {id: repo_content, type: repo_content, includes: [go-controller/src], sorting: normal}
-  - name: py-controller
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [plan-mode.md]}
+    #- {id: repo_content, type: repo_content, includes: [go-controller/src], sorting: normal}
+  - name: execute
     template: prompt_template
     resolvers:
-    - {id: repo_content, type: repo_content, includes: [controller], sorting: normal}
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [do-mode.md]}
+    #- {id: repo_content, type: repo_content, includes: [go-controller/src], sorting: normal}
+
+  - name: doc-mgm
+    template: prompt_template
+    resolvers:
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [doc-mgmnt.md, project-history.md]}
+    #- {id: repo_content, type: repo_content, includes: [go-controller/src], sorting: normal}
+
   - name: debloat
     template: prompt_template
     resolvers:
     - {id: prompt_fragments, type: multi-document-retrieval, files: [debloat-instructions.md]}
-    - {id: repo_content, type: repo_content, includes: [go-controller/src], sorting: normal}
+    #- {id: repo_content, type: repo_content, includes: [go-controller/src], sorting: normal}
+
 
 - name: pm
   plan: {name: proxmox_vm_factory_plan}
