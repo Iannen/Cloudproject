@@ -121,7 +121,7 @@ func (t *TSMgr) assimilate(ctx context.Context, p *TSPeer) {
 
 	l, mems, err := t.str.AddLearner(ctx, fmt.Sprintf("http://%s:%d", ip, config.EtcdPeerPort))
 	if err != nil {
-		log.Printf("[TSMgr] Add learner %s failed: %v", p.HostName, err)
+		log.Printf("[TSMgr] assimilation failed host=%s step=add_learner: %v", p.HostName, err)
 		return
 	}
 
@@ -151,24 +151,24 @@ func (t *TSMgr) assimilate(ctx context.Context, p *TSPeer) {
 	})
 
 	if !t.post(ctx, fmt.Sprintf("http://%s:8080/assimilate", ip), b) {
-		log.Printf("[TSMgr] Assimilate call failed for %s", p.HostName)
+		log.Printf("[TSMgr] assimilation failed host=%s step=assimilate_rpc", p.HostName)
 		return
 	}
 
 	time.Sleep(2 * time.Second)
 
 	if err := t.str.PromoteMember(ctx, lid); err != nil {
-		log.Printf("[TSMgr] Promote %s failed: %v", p.HostName, err)
+		log.Printf("[TSMgr] assimilation failed host=%s step=promote: %v", p.HostName, err)
 		return
 	}
 	lid = 0
 
 	if !t.post(ctx, fmt.Sprintf("http://%s:8080/activate", ip), nil) {
-		log.Printf("[TSMgr] Activate call failed for %s", p.HostName)
+		log.Printf("[TSMgr] assimilation failed host=%s step=activate_rpc", p.HostName)
 		return
 	}
 
-	log.Printf("[TSMgr] Successfully assimilated and activated %s", p.HostName)
+	log.Printf("[TSMgr] assimilated and activated host=%s ip=%s", p.HostName, ip)
 }
 
 func (t *TSMgr) post(ctx context.Context, url string, body []byte) bool {

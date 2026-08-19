@@ -52,7 +52,6 @@ type MemberRole struct {
 
 func stopAllRuntimes(rts map[string]*AssignmentRuntime) {
 	for id, rt := range rts {
-		log.Printf("[Member] Stopping active runtime %s during session transition/teardown", id)
 		rt.Stop()
 		delete(rts, id)
 	}
@@ -223,7 +222,6 @@ func (m *MemberRole) startWatch(ctx context.Context, nodeID string, rev int64, c
 
 func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, ch chan<- event) bool {
 	wCh := m.store.WatchAssignments(ctx, nodeID, *rev+1)
-	log.Printf("[Member] Monitoring assignment watch stream from revision: %d", *rev+1)
 
 	for {
 		select {
@@ -231,12 +229,13 @@ func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, c
 			return false
 		case resp, ok := <-wCh:
 			if !ok {
-				log.Printf("[Member] Assignment watch channel closed. Reconnecting...")
 				return true
 			}
 
 			if resp.Canceled {
-				log.Printf("[Member] Assignment watch canceled (Error: %v). Reconnecting...", resp.Err())
+				if !errors.Is(resp.Err(), context.Canceled) {
+					log.Printf("[Member] watch canceled revision=%d: %v", *rev, resp.Err())
+				}
 				return !errors.Is(resp.Err(), context.Canceled)
 			}
 
@@ -275,7 +274,6 @@ func (m *MemberRole) reconcile(
 
 	for id, rt := range rts {
 		if !want[id] {
-			log.Printf("[Reconciliation] Stopping assignment: %s", id)
 			rt.Stop()
 			delete(rts, id)
 		}
@@ -283,17 +281,14 @@ func (m *MemberRole) reconcile(
 
 	for _, id := range ids {
 		if _, ok := rts[id]; !ok {
-			log.Printf("[Reconciliation] Discovered new assignment: %s. Fetching definition...", id)
 			asg, err := m.store.AssignmentDef(ctx, id)
 			if err != nil {
-				log.Printf("[Reconciliation] Failed to fetch definition for %s: %v", id, err)
+				log.Printf("[Member] fetch assignment def failed id=%s: %v", id, err)
 				continue
 			}
 
-			log.Printf("[Reconciliation] Starting assignment %s with role %s", id, asg.Role)
-
 			if err := m.registry.Start(ctx, asg, sess); err != nil {
-				log.Printf("[Reconciliation] Failed to start assignment %s: %v", id, err)
+				log.Printf("[Member] start assignment failed id=%s role=%s: %v", id, asg.Role, err)
 				continue
 			}
 

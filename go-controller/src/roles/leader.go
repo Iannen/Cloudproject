@@ -73,9 +73,9 @@ func reconcile(ctx context.Context, str LeaderStore) {
 			}
 			id := fmt.Sprintf("%s-%s-%d", spec.Name, node, time.Now().UnixNano()%10000)
 			if err := str.CreateAssignment(ctx, models.Assignment{ID: id, NodeID: node, Role: spec.Name}); err != nil {
-				log.Printf("[Leader] Assign fail %s->%s: %v", spec.Name, node, err)
+				log.Printf("[Leader] assign failed role=%s node=%s: %v", spec.Name, node, err)
 			} else {
-				log.Printf("[Leader] Assigned %s to %s", id, node)
+				log.Printf("[Leader] assigned id=%s node=%s", id, node)
 			}
 		}
 	}

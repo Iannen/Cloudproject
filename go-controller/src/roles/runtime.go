@@ -36,14 +36,10 @@ func (r *AssignmentRuntime) Start(
 		defer close(r.DoneChan)
 		defer cancel()
 
-		log.Printf("[Runtime] Executing role '%s' for assignment %s", r.Definition.Role, r.AssignmentID)
-
 		err := runner.Run(ctx, r.Definition, sess)
 		if err != nil && ctx.Err() == nil {
-			log.Printf("[Runtime] Assignment %s returned error: %v", r.AssignmentID, err)
+			log.Printf("[Runtime] execution failed id=%s role=%s: %v", r.AssignmentID, r.Definition.Role, err)
 		}
-
-		log.Printf("[Runtime] Finished role execution for assignment %s", r.AssignmentID)
 	}()
 }
 
