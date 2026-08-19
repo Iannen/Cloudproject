@@ -1,0 +1,3 @@
+- Single-Event Output: Log only significant state transitions or action outcomes—prefer one log entry per action over sequential multi-step progress logs.
+- Outcome Bounding: Eliminate redundant pre-execution logs ("attempting action...") in favor of a single post-execution entry capturing success or failure.
+- Contextual Efficiency: Retain relevant fields (e.g., node IDs, revision numbers) within structured fields while stripping conversational message fluff.

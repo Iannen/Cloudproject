@@ -1,0 +1,1 @@
+the bootstrap package deals with configuring a host to act as a node

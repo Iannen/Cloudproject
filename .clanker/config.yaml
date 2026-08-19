@@ -23,44 +23,58 @@ domains:
 - name: bootstrap
   resolvers:
   - {id: domain_fragments, type: multi-document-retrieval, files: [
-        domain-bootstrap.md, bootstrap-backlog.md]}
+        bootstrap.md, bootstrap-backlog.md]}
   renders:
   - name: bootstrap
-    template: prompt_template
     resolvers:
+    - {id: prompt_fragments, type: multi-document-retrieval, files: []}
     - {id: repo_content, type: repo_content, includes: [bootstrap], sorting: normal}
 
 - name: controller
   resolvers:
-  - {id: domain_fragments, type: multi-document-retrieval, files: [controller-backlog.md]}
-  - {id: repo_content, type: repo_content, includes: [go-controller/src], sorting: normal}
+  - {id: repo_content, type: repo_content, includes: [go-controller/src], sorting: normal} 
+  - {id: domain_fragments, type: multi-document-retrieval, files: [controller.md]}
   renders:
   - name: plan
-    template: prompt_template
     resolvers:
-    - {id: prompt_fragments, type: multi-document-retrieval, files: [plan-mode.md]}
-
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [controller-backlog.md, plan-mode.md]}
   - name: execute
-    template: prompt_template
     resolvers:
-    - {id: prompt_fragments, type: multi-document-retrieval, files: [do-mode.md]}
-
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [controller-backlog.md, do-mode.md]}
   - name: doc-mgm
-    template: prompt_template
     resolvers:
-    - {id: prompt_fragments, type: multi-document-retrieval, files: [doc-mgmnt.md, {"file": "project-history.md", "tail_lines": 8}]}
-    
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [controller-backlog.md, doc-mgmnt.md, {"file": "project-history.md", "tail_lines": 8}]}
   - name: debloat
-    template: prompt_template
     resolvers:
     - {id: prompt_fragments, type: multi-document-retrieval, files: [debloat-instructions.md]}
+
+- name: debloat
+  resolvers:
+  - {id: repo_content, type: repo_content, includes: [go-controller/src], sorting: normal}
+  - {id: domain_fragments, type: multi-document-retrieval, files: [debloat.md]}
+  renders:
+  - name: compression
+    resolvers:
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [code-compression.md]}
+
+  - name: decouple
+    resolvers:
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [decouple-strat.md]}
+
+  - name: logging
+    resolvers:
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [logging-cleanup.md]}
+
+  - name: error-handling
+    resolvers:
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [error-streamlining.md]}
 
 - name: pm
   resolvers:
   - {id: domain_fragments, type: multi-document-retrieval, files: [
-        domain-bootstrap.md, pm-backlog.md]}
+        pm.md, pm-backlog.md]}
   renders:
   - name: pm-harness
-    template: prompt_template
     resolvers:
+    - {id: prompt_fragments, type: multi-document-retrieval, files: []}
     - {id: repo_content, type: repo_content, includes: [pm-harness], sorting: normal}
