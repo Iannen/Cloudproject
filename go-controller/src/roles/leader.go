@@ -65,15 +65,12 @@ func reconcile(ctx context.Context, str LeaderStore) {
 
 	for _, spec := range config.ClusterSpec {
 		curr := byRole[spec.Name]
-		missing := spec.Replicas - len(curr)
-
-		for i := 0; i < missing; i++ {
+		for i := 0; i < spec.Replicas-len(curr); i++ {
 			node := pickNode(nodes, curr)
 			if node == "" {
 				log.Printf("[Leader] No suitable node available for role %s", spec.Name)
 				break
 			}
-
 			id := fmt.Sprintf("%s-%s-%d", spec.Name, node, time.Now().UnixNano()%10000)
 			if err := str.CreateAssignment(ctx, models.Assignment{ID: id, NodeID: node, Role: spec.Name}); err != nil {
 				log.Printf("[Leader] Assign fail %s->%s: %v", spec.Name, node, err)

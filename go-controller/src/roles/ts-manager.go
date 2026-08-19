@@ -195,9 +195,8 @@ func (t *TSMgr) localIP(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	ip := strings.TrimSpace(string(out))
-	if ip == "" {
-		return "", fmt.Errorf("empty tailscale ip")
+	if ip := strings.TrimSpace(string(out)); ip != "" {
+		return ip, nil
 	}
-	return ip, nil
+	return "", fmt.Errorf("empty tailscale ip")
 }
