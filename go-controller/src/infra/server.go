@@ -163,10 +163,7 @@ func runCompose(ctx context.Context, args ...string) ([]byte, error) {
 
 func (s *HttpServer) connectEtcd(ctx context.Context) (*clientv3.Client, error) {
 	for i := 0; i < config.StartupRetries; i++ {
-		cli, err := clientv3.New(clientv3.Config{
-			Endpoints:   []string{config.EtcdEndpoint},
-			DialTimeout: config.Timeout,
-		})
+		cli, err := clientv3.New(clientv3.Config{Endpoints: []string{config.EtcdEndpoint}, DialTimeout: config.Timeout})
 		if err == nil {
 			sCtx, cancel := context.WithTimeout(ctx, config.Timeout)
 			_, err = cli.Status(sCtx, config.EtcdEndpoint)
@@ -179,7 +176,7 @@ func (s *HttpServer) connectEtcd(ctx context.Context) (*clientv3.Client, error) 
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(config.StartupRetries):
+		case <-time.After(config.StartupInterval):
 		}
 	}
 	return nil, fmt.Errorf("etcd connection failed after retries")

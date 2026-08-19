@@ -191,14 +191,9 @@ func (s *Store) GetClusterMembers(ctx context.Context) ([]models.MemberInfo, err
 	if err != nil {
 		return nil, fmt.Errorf("member list: %w", err)
 	}
-
-	members := make([]models.MemberInfo, 0, len(resp.Members))
+	res := make([]models.MemberInfo, 0, len(resp.Members))
 	for _, m := range resp.Members {
-		members = append(members, models.MemberInfo{
-			ID:       m.ID,
-			Name:     m.Name,
-			PeerURLs: m.PeerURLs,
-		})
+		res = append(res, models.MemberInfo{ID: m.ID, Name: m.Name, PeerURLs: m.PeerURLs})
 	}
-	return members, nil
+	return res, nil
 }
