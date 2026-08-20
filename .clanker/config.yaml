@@ -44,9 +44,6 @@ domains:
   - name: doc-mgm
     resolvers:
     - {id: prompt_fragments, type: multi-document-retrieval, files: [controller-backlog.md, doc-mgmnt.md, {"file": "project-history.md", "tail_lines": 8}]}
-  - name: debloat
-    resolvers:
-    - {id: prompt_fragments, type: multi-document-retrieval, files: [debloat-instructions.md]}
 
 - name: debloat
   resolvers:

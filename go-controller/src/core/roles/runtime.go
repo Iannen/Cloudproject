@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"cloud-controller/src/models"
+	"cloud-controller/src/core/models"
 
 	"go.etcd.io/etcd/client/v3/concurrency"
 )

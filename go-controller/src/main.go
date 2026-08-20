@@ -1,9 +1,10 @@
 package main
 
 import (
-	"cloud-controller/src/config"
-	"cloud-controller/src/infra"
-	"cloud-controller/src/roles"
+	"cloud-controller/src/core/config"
+	"cloud-controller/src/core/infra"
+	"cloud-controller/src/core/roles"
+	adapters "cloud-controller/src/infra"
 	"context"
 	"log"
 	"os"
@@ -19,8 +20,12 @@ func main() {
 
 	reg := roles.NewRegistry()
 
-	server := infra.NewHttpServer(ctx, ":8080", reg)
-	server.Start()
+	dcr := adapters.NewDockerAdapter()
+	osa := adapters.NewOsAdapter()
+	cms := adapters.NewListenerAdapter()
+
+	server := infra.NewHttpServer(ctx, ":8080", reg, dcr, osa, cms, cms)
+	server.Start(":8080")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

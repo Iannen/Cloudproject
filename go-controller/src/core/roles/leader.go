@@ -1,13 +1,12 @@
 package roles
 
 import (
+	"cloud-controller/src/core/config"
+	"cloud-controller/src/core/models"
 	"context"
 	"fmt"
 	"log"
 	"time"
-
-	"cloud-controller/src/config"
-	"cloud-controller/src/models"
 
 	"go.etcd.io/etcd/client/v3/concurrency"
 )

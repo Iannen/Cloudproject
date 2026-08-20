@@ -1,57 +1,62 @@
 package infra
 
 import (
+	"cloud-controller/src/core/config"
+	"cloud-controller/src/core/models"
+	"cloud-controller/src/core/roles"
+	adapters "cloud-controller/src/infra"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
-	"os"
-	"os/exec"
-	"strings"
 	"time"
-
-	"cloud-controller/src/adapters"
-	"cloud-controller/src/config"
-	"cloud-controller/src/models"
-	"cloud-controller/src/roles"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+type ListenerCreature interface {
+	RegisterHandler(pattern string, handler http.HandlerFunc)
+	Start(addr string)
+	Shutdown(ctx context.Context) error
+}
+type SpeakerCreature interface {
+	WaitEndpointReady(ctx context.Context, endpoint string) error
+}
+type OsCreature interface {
+	WriteEnvConfig(ctx context.Context, payload models.AssimilatePayload) error
+}
+type DockerCreature interface {
+	IsEtcdRunning(ctx context.Context) (bool, error)
+	StartEtcd(ctx context.Context) error
+	ResetEtcd(ctx context.Context) error
+}
+
 type HttpServer struct {
-	srv *http.Server
+	dcr DockerCreature
+	osa OsCreature
+	cms ListenerCreature
+	spk SpeakerCreature
 	ctx context.Context
 	str *adapters.Store
 	reg *roles.Registry
 }
 
-func NewHttpServer(ctx context.Context, addr string, reg *roles.Registry) *HttpServer {
-	mux := http.NewServeMux()
-	s := &HttpServer{ctx: ctx, reg: reg}
-
-	mux.HandleFunc("/initialize", s.handleInit)
-	mux.HandleFunc("/assimilate", s.handleAssimilate)
-	mux.HandleFunc("/activate", s.handleActivate)
-
-	s.srv = &http.Server{Addr: addr, Handler: mux}
+func NewHttpServer(ctx context.Context, addr string, reg *roles.Registry, dcr DockerCreature, osa OsCreature, cms ListenerCreature, spk SpeakerCreature) *HttpServer {
+	s := &HttpServer{ctx: ctx, reg: reg, dcr: dcr, osa: osa, cms: cms, spk: spk}
+	s.cms.RegisterHandler("/initialize", s.handleInit)
+	s.cms.RegisterHandler("/assimilate", s.handleAssimilate)
+	s.cms.RegisterHandler("/activate", s.handleActivate)
 	return s
 }
 
-func (s *HttpServer) Start() {
-	log.Printf("[HTTP] Running on %s", s.srv.Addr)
-	go func() {
-		if err := s.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("[HTTP] Error: %v", err)
-		}
-	}()
+func (s *HttpServer) Start(addr string) {
+	s.cms.Start(addr)
 }
 
 func (s *HttpServer) Shutdown(ctx context.Context) error {
-	return s.srv.Shutdown(ctx)
+	return s.cms.Shutdown(ctx)
 }
-
 func httpErr(w http.ResponseWriter, msg string, code int) {
 	log.Printf("[HTTP] %d: %s", code, msg)
 	http.Error(w, msg, code)
@@ -64,12 +69,12 @@ func (s *HttpServer) handleInit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := config.NodeID()
-	if out, err := runCompose(r.Context(), "ps", "-q", "etcd"); err == nil && len(strings.TrimSpace(string(out))) > 0 {
+	if running, err := s.dcr.IsEtcdRunning(r.Context()); err == nil && running {
 		fmt.Fprintf(w, "Node %s already initialized.\n", id)
 		return
 	}
 
-	if _, err := runCompose(r.Context(), "up", "-d", "etcd"); err != nil {
+	if err := s.dcr.StartEtcd(r.Context()); err != nil {
 		httpErr(w, fmt.Sprintf("etcd start failed: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -100,35 +105,26 @@ func (s *HttpServer) handleAssimilate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := config.NodeID()
-	env := fmt.Sprintf("HOSTNAME=%s\nTAILSCALE_IP=%s\nETCD_NAME=%s\nETCD_INITIAL_CLUSTER=%s\nETCD_INITIAL_CLUSTER_STATE=existing\n",
-		id, p.AssignedIP, id, p.EtcdInitialCluster)
-
-	if err := os.WriteFile(config.BootstrapDir+"/.env", []byte(env), 0644); err != nil {
+	if err := s.osa.WriteEnvConfig(r.Context(), p); err != nil {
 		httpErr(w, "config write failed", http.StatusInternalServerError)
 		return
 	}
 
-	_, _ = runCompose(r.Context(), "down", "etcd", "--volumes", "--remove-orphans")
-	if _, err := runCompose(r.Context(), "up", "-d", "etcd"); err != nil {
+	_ = s.dcr.ResetEtcd(r.Context())
+	if err := s.dcr.StartEtcd(r.Context()); err != nil {
 		httpErr(w, fmt.Sprintf("etcd start failed: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	for i := 0; i < config.StartupRetries; i++ {
-		if c, err := net.DialTimeout("tcp", config.EtcdEndpoint, config.StartupInterval); err == nil {
-			_ = c.Close()
-			w.Write([]byte("Learner ready.\n"))
-			return
-		}
-		select {
-		case <-r.Context().Done():
+	if err := s.spk.WaitEndpointReady(r.Context(), config.EtcdEndpoint); err != nil {
+		if r.Context().Err() != nil {
 			httpErr(w, "timeout", http.StatusRequestTimeout)
 			return
-		case <-time.After(config.StartupInterval):
 		}
+		httpErr(w, "etcd socket timeout", http.StatusInternalServerError)
+		return
 	}
-	httpErr(w, "etcd socket timeout", http.StatusInternalServerError)
+	w.Write([]byte("Learner ready.\n"))
 }
 
 func (s *HttpServer) handleActivate(w http.ResponseWriter, r *http.Request) {
@@ -149,16 +145,6 @@ func (s *HttpServer) handleActivate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, "Node %s activated.\n", config.NodeID())
-}
-
-func runCompose(ctx context.Context, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "docker", append([]string{"compose"}, args...)...)
-	cmd.Dir = config.BootstrapDir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return out, fmt.Errorf("docker compose %s: %w (%s)", strings.Join(args, " "), err, out)
-	}
-	return out, nil
 }
 
 func (s *HttpServer) connectEtcd(ctx context.Context) (*clientv3.Client, error) {

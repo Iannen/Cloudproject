@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"sync"
 
-	"cloud-controller/src/config"
-	"cloud-controller/src/models"
+	"cloud-controller/src/core/config"
+	"cloud-controller/src/core/models"
 
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
