@@ -1,11 +1,11 @@
 package adapters
 
 import (
-	"cloud-controller/src/core/config"
-	"cloud-controller/src/core/models"
 	"context"
 	"encoding/json"
 	"fmt"
+	"go-controller/src/core/config"
+	"go-controller/src/core/models"
 	"time"
 
 	clientv3 "go.etcd.io/etcd/client/v3"

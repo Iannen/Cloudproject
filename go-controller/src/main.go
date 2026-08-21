@@ -1,11 +1,11 @@
 package main
 
 import (
-	"cloud-controller/src/core/config"
-	"cloud-controller/src/core/models"
-	"cloud-controller/src/core/roles"
-	adapters "cloud-controller/src/infra"
 	"context"
+	"go-controller/src/core/config"
+	"go-controller/src/core/models"
+	"go-controller/src/core/roles"
+	adapters "go-controller/src/infra"
 	"log"
 	"os"
 	"os/signal"

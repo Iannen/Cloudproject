@@ -4,12 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"go-controller/src/core/config"
+	"go-controller/src/core/models"
 	"log"
 	"strings"
 	"time"
-
-	"cloud-controller/src/core/config"
-	"cloud-controller/src/core/models"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"

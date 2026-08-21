@@ -1,4 +1,4 @@
-module cloud-controller
+module go-controller
 
 go 1.25.0
 

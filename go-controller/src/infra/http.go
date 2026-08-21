@@ -1,9 +1,9 @@
 package adapters
 
 import (
-	"cloud-controller/src/core/config"
 	"context"
 	"fmt"
+	"go-controller/src/core/config"
 	"log"
 	"net"
 	"net/http"

@@ -3,13 +3,12 @@ package roles
 import (
 	"context"
 	"fmt"
+	"go-controller/src/core/config"
+	"go-controller/src/core/models"
+	adapters "go-controller/src/infra"
 	"log"
 	"net/http"
 	"sync"
-
-	"cloud-controller/src/core/config"
-	"cloud-controller/src/core/models"
-	adapters "cloud-controller/src/infra"
 
 	"go.etcd.io/etcd/client/v3/concurrency"
 )

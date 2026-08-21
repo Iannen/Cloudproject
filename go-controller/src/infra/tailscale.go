@@ -1,10 +1,10 @@
 package adapters
 
 import (
-	"cloud-controller/src/core/models"
 	"context"
 	"encoding/json"
 	"fmt"
+	"go-controller/src/core/models"
 	"os"
 	"os/exec"
 	"strings"
