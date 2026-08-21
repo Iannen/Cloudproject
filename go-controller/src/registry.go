@@ -133,6 +133,8 @@ func (r *Registry) runner(role string) (RoleRunner, error) {
 	case "tailscale-manager":
 		return roles.NewTSMgr(
 			r.etcd,
+			r.ts,
+			r.http,
 		), nil
 
 	default:

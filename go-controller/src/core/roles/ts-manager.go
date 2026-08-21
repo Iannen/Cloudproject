@@ -1,16 +1,11 @@
 package roles
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"log"
-	"net/http"
-	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -18,8 +13,9 @@ import (
 )
 
 type TSMgr struct {
-	str TsManagerStore
-	cli *http.Client
+	str  TsManagerStore
+	ts   TailscaleProvider
+	http NodeClient
 }
 
 func (t *TSMgr) Run(ctx context.Context, a *models.Assignment, s *concurrency.Session) error {
@@ -51,7 +47,7 @@ func (t *TSMgr) reconcile(ctx context.Context) {
 		}
 	}
 
-	peers, err := t.peers(ctx)
+	peers, err := t.ts.GetPeers(ctx)
 	if err != nil {
 		log.Printf("[TSMgr] Peer discovery failed: %v", err)
 		return
@@ -71,30 +67,9 @@ func (t *TSMgr) reconcile(ctx context.Context) {
 	}
 }
 
-func (t *TSMgr) peers(ctx context.Context) ([]*models.TSPeer, error) {
-	out, err := exec.CommandContext(ctx, "tailscale", "status", "--json").Output()
-	if err != nil {
-		return nil, fmt.Errorf("tailscale status: %w", err)
-	}
-
-	var st models.TSStatus
-	if err := json.Unmarshal(out, &st); err != nil {
-		return nil, fmt.Errorf("unmarshal status: %w", err)
-	}
-
-	res := make([]*models.TSPeer, 0, len(st.Peer)+1)
-	if st.Self != nil {
-		res = append(res, st.Self)
-	}
-	for _, p := range st.Peer {
-		res = append(res, p)
-	}
-	return res, nil
-}
-
 func (t *TSMgr) assimilate(ctx context.Context, p *models.TSPeer) {
 	ip := p.TailscaleIPs[0]
-	locIP, err := t.localIP(ctx)
+	locIP, err := t.ts.GetLocalIP(ctx)
 	if err != nil {
 		log.Printf("[TSMgr] Local IP lookup failed: %v", err)
 		return
@@ -124,15 +99,15 @@ func (t *TSMgr) assimilate(ctx context.Context, p *models.TSPeer) {
 		}
 	}
 
-	b, _ := json.Marshal(models.AssimilatePayload{
+	payload := models.AssimilatePayload{
 		LeaderName:         config.NodeID(),
-		LeaderPeerURL:      fmt.Sprintf("http://%s:2380", locIP),
+		LeaderPeerURL:      fmt.Sprintf("http://%s:%d", locIP, config.EtcdPeerPort),
 		EtcdInitialCluster: strings.Join(toks, ","),
 		AssignedIP:         ip,
-	})
+	}
 
-	if !t.post(ctx, fmt.Sprintf("http://%s:8080/assimilate", ip), b) {
-		log.Printf("[TSMgr] assimilation failed host=%s step=assimilate_rpc", p.HostName)
+	if err := t.http.Assimilate(ctx, ip, payload); err != nil {
+		log.Printf("[TSMgr] assimilation failed host=%s step=assimilate_rpc: %v", p.HostName, err)
 		return
 	}
 
@@ -144,42 +119,25 @@ func (t *TSMgr) assimilate(ctx context.Context, p *models.TSPeer) {
 	}
 	lid = 0
 
-	if !t.post(ctx, fmt.Sprintf("http://%s:8080/activate", ip), nil) {
-		log.Printf("[TSMgr] assimilation failed host=%s step=activate_rpc", p.HostName)
+	if err := t.http.Activate(ctx, ip); err != nil {
+		log.Printf("[TSMgr] assimilation failed host=%s step=activate_rpc: %v", p.HostName, err)
 		return
 	}
 
 	log.Printf("[TSMgr] assimilated and activated host=%s ip=%s", p.HostName, ip)
 }
 
-func (t *TSMgr) post(ctx context.Context, url string, body []byte) bool {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return false
+func NewTSMgr(str TsManagerStore, ts TailscaleProvider, http NodeClient) *TSMgr {
+	return &TSMgr{
+		str:  str,
+		ts:   ts,
+		http: http,
 	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	res, err := t.cli.Do(req)
-	if err != nil {
-		return false
-	}
-	_ = res.Body.Close()
-	return res.StatusCode == http.StatusOK
 }
 
-func (t *TSMgr) localIP(ctx context.Context) (string, error) {
-	if ip := os.Getenv("TAILSCALE_IP"); ip != "" {
-		return ip, nil
-	}
-	out, err := exec.CommandContext(ctx, "tailscale", "ip", "-4").Output()
-	if err != nil {
-		return "", err
-	}
-	if ip := strings.TrimSpace(string(out)); ip != "" {
-		return ip, nil
-	}
-	return "", fmt.Errorf("empty tailscale ip")
+type NodeClient interface {
+	Assimilate(ctx context.Context, targetIP string, payload models.AssimilatePayload) error
+	Activate(ctx context.Context, targetIP string) error
 }
 
 type TsManagerStore interface {
@@ -187,13 +145,4 @@ type TsManagerStore interface {
 	AddLearner(ctx context.Context, peerURL string) (*models.MemberInfo, []models.MemberInfo, error)
 	PromoteMember(ctx context.Context, memberID uint64) error
 	RemoveMember(ctx context.Context, memberID uint64) error
-}
-
-func NewTSMgr(str TsManagerStore) *TSMgr {
-	return &TSMgr{
-		str: str,
-		cli: &http.Client{
-			Timeout: config.Timeout,
-		},
-	}
 }
