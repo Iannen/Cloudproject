@@ -30,17 +30,18 @@ type TSMgr struct {
 	cli *http.Client
 }
 
-type TSPeer struct {
-	HostName     string   `json:"HostName"`
-	TailscaleIPs []string `json:"TailscaleIPs"`
-	Online       bool     `json:"Online"`
-}
+/*
+	type TSPeer struct {
+		HostName     string   `json:"HostName"`
+		TailscaleIPs []string `json:"TailscaleIPs"`
+		Online       bool     `json:"Online"`
+	}
 
-type TSStatus struct {
-	Peer map[string]*TSPeer `json:"Peer"`
-	Self *TSPeer            `json:"Self"`
-}
-
+	type TSStatus struct {
+		Peer map[string]*TSPeer `json:"Peer"`
+		Self *TSPeer            `json:"Self"`
+	}
+*/
 func (t *TSMgr) Run(ctx context.Context, a *models.Assignment, s *concurrency.Session) error {
 	tk := time.NewTicker(config.ReconcileInterval)
 	defer tk.Stop()
@@ -90,18 +91,18 @@ func (t *TSMgr) reconcile(ctx context.Context) {
 	}
 }
 
-func (t *TSMgr) peers(ctx context.Context) ([]*TSPeer, error) {
+func (t *TSMgr) peers(ctx context.Context) ([]*models.TSPeer, error) {
 	out, err := exec.CommandContext(ctx, "tailscale", "status", "--json").Output()
 	if err != nil {
 		return nil, fmt.Errorf("tailscale status: %w", err)
 	}
 
-	var st TSStatus
+	var st models.TSStatus
 	if err := json.Unmarshal(out, &st); err != nil {
 		return nil, fmt.Errorf("unmarshal status: %w", err)
 	}
 
-	res := make([]*TSPeer, 0, len(st.Peer)+1)
+	res := make([]*models.TSPeer, 0, len(st.Peer)+1)
 	if st.Self != nil {
 		res = append(res, st.Self)
 	}
@@ -111,7 +112,7 @@ func (t *TSMgr) peers(ctx context.Context) ([]*TSPeer, error) {
 	return res, nil
 }
 
-func (t *TSMgr) assimilate(ctx context.Context, p *TSPeer) {
+func (t *TSMgr) assimilate(ctx context.Context, p *models.TSPeer) {
 	ip := p.TailscaleIPs[0]
 	locIP, err := t.localIP(ctx)
 	if err != nil {

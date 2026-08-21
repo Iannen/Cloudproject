@@ -27,8 +27,10 @@ func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment, s *concurren
 	for {
 		select {
 		case <-ctx.Done():
+			log.Printf("[Leader] Context canceled, stopping leader role (%s): %v", a.ID, ctx.Err())
 			return nil
 		case <-tk.C:
+			log.Printf("[Leader] Ticker event received, running reconcile..")
 			reconcile(ctx, l.store)
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"cloud-controller/src/core/config"
@@ -50,24 +51,16 @@ type MemberRole struct {
 	registry *Registry
 }
 
-func stopAllRuntimes(rts map[string]*AssignmentRuntime) {
-	for id, rt := range rts {
-		rt.Stop()
-		delete(rts, id)
-	}
-}
-
 func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess *concurrency.Session) error {
 	nodeID := config.NodeID()
 	log.Printf("[Member] Permanent member role started for node %s", nodeID)
 
 	hbKey := config.NodeHeartbeatPath(nodeID)
-	rts := make(map[string]*AssignmentRuntime)
 
 	for {
 		select {
 		case <-ctx.Done():
-			stopAllRuntimes(rts)
+			m.registry.StopAll()
 			return nil
 		default:
 		}
@@ -120,7 +113,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess *conc
 			continue
 		}
 
-		m.reconcile(sCtx, initIDs, rts, sess)
+		m.reconcile(sCtx, initIDs, sess)
 
 		m.startWatch(sCtx, nodeID, rev, ch)
 		m.startTicker(sCtx, ch)
@@ -130,14 +123,14 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess *conc
 			select {
 			case <-ctx.Done():
 				cancel()
-				stopAllRuntimes(rts)
+				m.registry.StopAll()
 				_ = sess.Close()
 				return nil
 
 			case <-sess.Done():
 				log.Println("[Member] CRITICAL: Session lease lost! Evicting child roles...")
 				cancel()
-				stopAllRuntimes(rts)
+				m.registry.StopAll()
 				alive = false
 
 			case e := <-ch:
@@ -153,7 +146,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess *conc
 					targets = ids
 				}
 
-				m.reconcile(sCtx, targets, rts, sess)
+				m.reconcile(sCtx, targets, sess)
 			}
 		}
 
@@ -162,6 +155,43 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess *conc
 	}
 }
 
+func (m *MemberRole) reconcile(
+	ctx context.Context,
+	ids []string,
+	sess *concurrency.Session,
+) {
+	log.Printf("[Member] enter reconcile")
+	want := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		want[id] = true
+	}
+
+	active := m.registry.ActiveAssignments()
+	for id := range active {
+		if strings.HasPrefix(id, "leader-") || strings.HasPrefix(id, "member-") {
+			continue
+		}
+
+		if !want[id] {
+			m.registry.Stop(id)
+		}
+	}
+
+	for _, id := range ids {
+		if !active[id] {
+			asg, err := m.store.AssignmentDef(ctx, id)
+			if err != nil {
+				log.Printf("[Member] fetch assignment def failed id=%s: %v", id, err)
+				continue
+			}
+
+			if err := m.registry.Start(asg, sess); err != nil {
+				log.Printf("[Member] start assignment failed id=%s role=%s: %v", id, asg.Role, err)
+				continue
+			}
+		}
+	}
+}
 func (m *MemberRole) startTicker(ctx context.Context, ch chan<- event) {
 	go func() {
 		tk := time.NewTicker(config.ReconcileInterval)
@@ -257,42 +287,6 @@ func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, c
 				default:
 				}
 			}
-		}
-	}
-}
-
-func (m *MemberRole) reconcile(
-	ctx context.Context,
-	ids []string,
-	rts map[string]*AssignmentRuntime,
-	sess *concurrency.Session,
-) {
-	want := make(map[string]bool, len(ids))
-	for _, id := range ids {
-		want[id] = true
-	}
-
-	for id, rt := range rts {
-		if !want[id] {
-			rt.Stop()
-			delete(rts, id)
-		}
-	}
-
-	for _, id := range ids {
-		if _, ok := rts[id]; !ok {
-			asg, err := m.store.AssignmentDef(ctx, id)
-			if err != nil {
-				log.Printf("[Member] fetch assignment def failed id=%s: %v", id, err)
-				continue
-			}
-
-			if err := m.registry.Start(asg, sess); err != nil {
-				log.Printf("[Member] start assignment failed id=%s role=%s: %v", id, asg.Role, err)
-				continue
-			}
-
-			rts[id] = NewAssignmentRuntime(asg)
 		}
 	}
 }

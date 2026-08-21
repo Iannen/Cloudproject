@@ -21,3 +21,14 @@ type AssimilatePayload struct {
 	EtcdInitialCluster string `json:"etcd_initial_cluster"`
 	AssignedIP         string `json:"assigned_ip"`
 }
+
+type TSPeer struct {
+	HostName     string   `json:"HostName"`
+	TailscaleIPs []string `json:"TailscaleIPs"`
+	Online       bool     `json:"Online"`
+}
+
+type TSStatus struct {
+	Peer map[string]*TSPeer `json:"Peer"`
+	Self *TSPeer            `json:"Self"`
+}
