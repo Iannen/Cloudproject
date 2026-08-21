@@ -23,8 +23,6 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 	nodeID := config.NodeID()
 	log.Printf("[Member] Permanent member role started for node %s", nodeID)
 
-	hbKey := config.NodeHeartbeatPath(nodeID)
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -45,8 +43,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 		}
 
 		sCtx, cancel := context.WithCancel(ctx)
-		ch := make(chan event, 10)
-
+		hbKey := config.NodeHeartbeatPath(nodeID)
 		if err := m.store.PutWithSession(sCtx, sess, hbKey, "alive"); err != nil {
 			log.Printf("[Member] Failed to register node heartbeat: %v. Resetting session...", err)
 			cancel()
@@ -69,9 +66,9 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 			if err := m.registry.Start(leaderAsg); err != nil {
 				log.Printf("[Member] Failed to start leader role: %v", err)
 			}
-		} else {
+		} /*else {
 			m.startLeaderWatcher(sCtx, ch)
-		}
+		}*/
 
 		initIDs, rev, err := m.store.NodeAssignments(sCtx, nodeID)
 		if err != nil {
@@ -83,6 +80,8 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 
 		m.reconcile(sCtx, initIDs)
 
+		ch := make(chan event, 10)
+		m.startLeaderWatcher(sCtx, ch)
 		m.startWatch(sCtx, nodeID, rev, ch)
 		m.startTicker(sCtx, ch)
 
@@ -159,6 +158,7 @@ func (m *MemberRole) reconcile(
 		}
 	}
 }
+
 func (m *MemberRole) startTicker(ctx context.Context, ch chan<- event) {
 	go func() {
 		tk := time.NewTicker(config.ReconcileInterval)
@@ -198,25 +198,20 @@ func (m *MemberRole) startLeaderWatcher(ctx context.Context, ch chan<- event) {
 func (m *MemberRole) startWatch(ctx context.Context, nodeID string, rev int64, ch chan<- event) {
 	go func() {
 		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-
 			if !m.watchLoop(ctx, nodeID, &rev, ch) {
 				return
 			}
 
+			t := time.NewTimer(config.WatchReconnectDelay)
 			select {
 			case <-ctx.Done():
+				t.Stop()
 				return
-			case <-time.After(config.WatchReconnectDelay):
+			case <-t.C:
 			}
 		}
 	}()
 }
-
 func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, ch chan<- event) bool {
 	wCh := m.store.WatchAssignments(ctx, nodeID, *rev+1)
 
