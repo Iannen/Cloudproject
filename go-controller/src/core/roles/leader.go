@@ -7,15 +7,13 @@ import (
 	"go-controller/src/core/models"
 	"log"
 	"time"
-
-	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
 type LeaderRole struct {
 	store LeaderStore
 }
 
-func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment, s *concurrency.Session) error {
+func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment) error {
 	tk := time.NewTicker(config.ReconcileInterval)
 	defer tk.Stop()
 

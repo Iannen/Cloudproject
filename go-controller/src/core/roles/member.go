@@ -19,7 +19,7 @@ type MemberRole struct {
 	registry RegistryInterface
 }
 
-func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess *concurrency.Session) error {
+func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 	nodeID := config.NodeID()
 	log.Printf("[Member] Permanent member role started for node %s", nodeID)
 

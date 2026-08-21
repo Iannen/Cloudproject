@@ -8,8 +8,6 @@ import (
 	"log"
 	"strings"
 	"time"
-
-	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
 type TSMgr struct {
@@ -18,7 +16,7 @@ type TSMgr struct {
 	http NodeClient
 }
 
-func (t *TSMgr) Run(ctx context.Context, a *models.Assignment, s *concurrency.Session) error {
+func (t *TSMgr) Run(ctx context.Context, a *models.Assignment) error {
 	tk := time.NewTicker(config.ReconcileInterval)
 	defer tk.Stop()
 

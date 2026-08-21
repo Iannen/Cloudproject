@@ -8,8 +8,6 @@ import (
 	"go-controller/src/core/models"
 	"log"
 	"net/http"
-
-	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
 type NodeRole struct {
@@ -20,7 +18,7 @@ type NodeRole struct {
 	reg RegistryInterface
 }
 
-func (n *NodeRole) Run(ctx context.Context, a *models.Assignment, s *concurrency.Session) error {
+func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) error {
 	log.Printf("[NodeRole] Starting HTTP listener on %s for node %s", config.HTTPPort, a.NodeID)
 	n.cms.Start(config.HTTPPort)
 

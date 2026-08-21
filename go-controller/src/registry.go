@@ -14,7 +14,7 @@ import (
 )
 
 type RoleRunner interface {
-	Run(ctx context.Context, asg *models.Assignment, sess *concurrency.Session) error
+	Run(ctx context.Context, asg *models.Assignment) error
 }
 
 type Registry struct {
@@ -169,7 +169,7 @@ func (r *AssignmentRuntime) Start(
 		defer close(r.DoneChan)
 		defer cancel()
 
-		err := runner.Run(ctx, r.Definition, sess)
+		err := runner.Run(ctx, r.Definition)
 		if err != nil && ctx.Err() == nil {
 			log.Printf("[Runtime] execution failed id=%s role=%s: %v", r.AssignmentID, r.Definition.Role, err)
 		}
