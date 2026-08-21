@@ -1,9 +1,8 @@
-package infra
+package roles
 
 import (
 	"cloud-controller/src/core/config"
 	"cloud-controller/src/core/models"
-	"cloud-controller/src/core/roles"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -33,10 +32,10 @@ type HttpServer struct {
 	osa OsCreature
 	cms ListenerCreature
 	spk SpeakerCreature
-	reg *roles.Registry
+	reg *Registry
 }
 
-func NewHttpServer(ctx context.Context, addr string, reg *roles.Registry, dcr DockerCreature, osa OsCreature, cms ListenerCreature, spk SpeakerCreature) *HttpServer {
+func NewHttpServer(ctx context.Context, addr string, reg *Registry, dcr DockerCreature, osa OsCreature, cms ListenerCreature, spk SpeakerCreature) *HttpServer {
 	s := &HttpServer{reg: reg, dcr: dcr, osa: osa, cms: cms, spk: spk}
 	s.cms.RegisterHandler("/initialize", s.handleInit)
 	s.cms.RegisterHandler("/assimilate", s.handleAssimilate)

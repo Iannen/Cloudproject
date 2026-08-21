@@ -2,7 +2,6 @@ package main
 
 import (
 	"cloud-controller/src/core/config"
-	"cloud-controller/src/core/infra"
 	"cloud-controller/src/core/roles"
 	adapters "cloud-controller/src/infra"
 	"context"
@@ -13,7 +12,7 @@ import (
 )
 
 func main() {
-	log.Printf("[Main] Fresh Starting controller node with ID: %s", config.NodeID())
+	log.Printf("[Main] Starting controller node with ID: %s", config.NodeID())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -24,7 +23,7 @@ func main() {
 	osa := adapters.NewOsAdapter()
 	cms := adapters.NewListenerAdapter()
 
-	server := infra.NewHttpServer(ctx, ":8080", reg, dcr, osa, cms, cms)
+	server := roles.NewHttpServer(ctx, ":8080", reg, dcr, osa, cms, cms)
 	server.Start(":8080")
 
 	sigChan := make(chan os.Signal, 1)
