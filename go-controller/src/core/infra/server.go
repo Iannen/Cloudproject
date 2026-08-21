@@ -41,7 +41,6 @@ func NewHttpServer(ctx context.Context, addr string, reg *roles.Registry, dcr Do
 	s.cms.RegisterHandler("/initialize", s.handleInit)
 	s.cms.RegisterHandler("/assimilate", s.handleAssimilate)
 	s.cms.RegisterHandler("/activate", s.handleActivate)
-	s.cms.RegisterHandler("/hello", s.handleHello)
 	return s
 }
 
@@ -53,42 +52,6 @@ func (s *HttpServer) Shutdown(ctx context.Context) error {
 	return s.cms.Shutdown(ctx)
 }
 
-/*
-	type HttpServer struct {
-		dcr DockerCreature
-		osa OsCreature
-		cms ListenerCreature
-		spk SpeakerCreature
-		reg *roles.Registry
-		srv *http.Server
-	}
-
-	func NewHttpServer(ctx context.Context, addr string, reg *roles.Registry, dcr DockerCreature, osa OsCreature, cms ListenerCreature, spk SpeakerCreature) *HttpServer {
-		s := &HttpServer{reg: reg, dcr: dcr, osa: osa, cms: cms, spk: spk}
-		mux := http.NewServeMux()
-		mux.HandleFunc("/hello", s.handleHello)
-		s.srv = &http.Server{
-			Addr:    addr,
-			Handler: mux,
-		}
-		return s
-	}
-
-	func (s *HttpServer) Start(addr string) {
-		go func() {
-			if err := s.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Printf("[HTTP] server error: %v", err)
-			}
-		}()
-	}
-
-	func (s *HttpServer) Shutdown(ctx context.Context) error {
-		if s.srv == nil {
-			return nil
-		}
-		return s.srv.Shutdown(ctx)
-	}
-*/
 func httpErr(w http.ResponseWriter, msg string, code int) {
 	log.Printf("[HTTP] %d: %s", code, msg)
 	http.Error(w, msg, code)
@@ -183,10 +146,4 @@ func (s *HttpServer) activateMember() error {
 		Role:   "member",
 	}
 	return s.reg.Start(assignment, nil)
-}
-
-func (s *HttpServer) handleHello(w http.ResponseWriter, r *http.Request) {
-	log.Print("hello received")
-	fmt.Fprintln(w, "hello world")
-	log.Print("hello response written")
 }

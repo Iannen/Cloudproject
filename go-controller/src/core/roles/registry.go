@@ -19,7 +19,6 @@ type RoleRunner interface {
 
 type Registry struct {
 	ctx context.Context
-	//mu  sync.RWMutex
 	str any
 }
 
@@ -43,10 +42,6 @@ func (r *Registry) Start(a *models.Assignment, s *concurrency.Session) error {
 	if a == nil {
 		return fmt.Errorf("assignment is nil")
 	}
-
-	//r.mu.RLock()
-	//str := r.str
-	//r.mu.RUnlock()
 
 	if r.str == nil {
 		return fmt.Errorf("store not initialized")
