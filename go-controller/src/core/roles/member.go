@@ -168,7 +168,7 @@ func (m *MemberRole) reconcile(
 
 	active := m.registry.ActiveAssignments()
 	for id := range active {
-		if strings.HasPrefix(id, "leader-") || strings.HasPrefix(id, "member-") {
+		if strings.HasPrefix(id, "leader-") || strings.HasPrefix(id, "member-") || strings.HasPrefix(id, "node-") {
 			continue
 		}
 

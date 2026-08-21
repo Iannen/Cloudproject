@@ -18,61 +18,25 @@ type RoleRunner interface {
 	Run(ctx context.Context, asg *models.Assignment, sess *concurrency.Session) error
 }
 
-/*
-	type Registry struct {
-		ctx context.Context
-		str any
-	}
+type Dependencies struct {
+	Docker   DockerCreature
+	Os       OsCreature
+	Listener ListenerCreature
+	Speaker  SpeakerCreature
+}
 
-	func NewRegistry(ctx context.Context) *Registry {
-		return &Registry{
-			ctx: ctx,
-		}
-	}
-
-	func (r *Registry) InitializeStore() error {
-		store, err := adapters.NewStore(r.ctx, config.EtcdEndpoint)
-		if err != nil {
-			return fmt.Errorf("failed to initialize store: %w", err)
-		}
-
-		r.str = store
-		return nil
-	}
-
-	func (r *Registry) Start(a *models.Assignment, s *concurrency.Session) error {
-		if a == nil {
-			return fmt.Errorf("assignment is nil")
-		}
-
-		if r.str == nil {
-			return fmt.Errorf("store not initialized")
-		}
-
-		rn, err := r.runner(a.Role, r.str)
-		if err != nil {
-			return err
-		}
-
-		go func() {
-			if err := rn.Run(r.ctx, a, s); err != nil && r.ctx.Err() == nil {
-				log.Printf("[%s] Exited with error: %v", a.Role, err)
-			}
-		}()
-
-		return nil
-	}
-*/
 type Registry struct {
 	ctx      context.Context
 	mu       sync.Mutex
+	deps     Dependencies
 	str      any
 	runtimes map[string]*AssignmentRuntime
 }
 
-func NewRegistry(ctx context.Context) *Registry {
+func NewRegistry(ctx context.Context, deps Dependencies) *Registry {
 	return &Registry{
 		ctx:      ctx,
+		deps:     deps,
 		runtimes: make(map[string]*AssignmentRuntime),
 	}
 }
@@ -83,7 +47,9 @@ func (r *Registry) InitializeStore() error {
 		return fmt.Errorf("failed to initialize store: %w", err)
 	}
 
+	r.mu.Lock()
 	r.str = store
+	r.mu.Unlock()
 	return nil
 }
 
@@ -93,7 +59,7 @@ func (r *Registry) Start(a *models.Assignment, s *concurrency.Session) error {
 	}
 
 	r.mu.Lock()
-	if r.str == nil {
+	if a.Role != "node" && r.str == nil {
 		r.mu.Unlock()
 		return fmt.Errorf("store not initialized")
 	}
@@ -156,6 +122,9 @@ func (r *Registry) ActiveAssignments() map[string]bool {
 
 func (r *Registry) runner(role string, str any) (RoleRunner, error) {
 	switch role {
+	case "node":
+		return NewNodeRole(r, r.deps.Docker, r.deps.Os, r.deps.Listener, r.deps.Speaker), nil
+
 	case "member":
 		s, ok := str.(MemberStore)
 		if !ok {

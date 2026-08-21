@@ -2,6 +2,7 @@ package main
 
 import (
 	"cloud-controller/src/core/config"
+	"cloud-controller/src/core/models"
 	"cloud-controller/src/core/roles"
 	adapters "cloud-controller/src/infra"
 	"context"
@@ -12,27 +13,39 @@ import (
 )
 
 func main() {
-	log.Printf("[Main] Starting controller node with ID: %s", config.NodeID())
+	nodeID := config.NodeID()
+	log.Printf("[Main] Starting controller node with ID: %s", nodeID)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	reg := roles.NewRegistry(ctx)
+	listener := adapters.NewListenerAdapter()
+	deps := roles.Dependencies{
+		Docker:   adapters.NewDockerAdapter(),
+		Os:       adapters.NewOsAdapter(),
+		Listener: listener,
+		Speaker:  listener,
+	}
 
-	dcr := adapters.NewDockerAdapter()
-	osa := adapters.NewOsAdapter()
-	cms := adapters.NewListenerAdapter()
+	reg := roles.NewRegistry(ctx, deps)
 
-	server := roles.NewHttpServer(ctx, ":8080", reg, dcr, osa, cms, cms)
-	server.Start(":8080")
+	nodeAsg := &models.Assignment{
+		NodeID: nodeID,
+		ID:     "node-" + nodeID,
+		Role:   "node",
+	}
+
+	if err := reg.Start(nodeAsg, nil); err != nil {
+		log.Fatalf("[Main] Failed to start base node role: %v", err)
+	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
 	log.Println("[Main] Shutting down node...")
+	reg.StopAll()
 	cancel()
 
-	_ = server.Shutdown(context.Background())
 	log.Println("[Main] Node stopped cleanly")
 }
