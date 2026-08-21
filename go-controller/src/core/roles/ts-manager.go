@@ -188,3 +188,12 @@ type TsManagerStore interface {
 	PromoteMember(ctx context.Context, memberID uint64) error
 	RemoveMember(ctx context.Context, memberID uint64) error
 }
+
+func NewTSMgr(str TsManagerStore) *TSMgr {
+	return &TSMgr{
+		str: str,
+		cli: &http.Client{
+			Timeout: config.Timeout,
+		},
+	}
+}

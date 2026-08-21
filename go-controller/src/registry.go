@@ -1,13 +1,13 @@
-package roles
+package main
 
 import (
 	"context"
 	"fmt"
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
+	"go-controller/src/core/roles"
 	adapters "go-controller/src/infra"
 	"log"
-	"net/http"
 	"sync"
 
 	"go.etcd.io/etcd/client/v3/concurrency"
@@ -17,38 +17,38 @@ type RoleRunner interface {
 	Run(ctx context.Context, asg *models.Assignment, sess *concurrency.Session) error
 }
 
-type Dependencies struct {
-	Docker   DockerCreature
-	Os       OsCreature
-	Listener ListenerCreature
-	Speaker  SpeakerCreature
-}
-
 type Registry struct {
 	ctx      context.Context
 	mu       sync.Mutex
-	deps     Dependencies
-	str      any
+	dcr      *adapters.DockerAdapter
+	etcd     *adapters.Store
+	http     *adapters.ListenerAdapter
+	osa      *adapters.OsAdapter
+	ts       *adapters.TailscaleAdapter
 	runtimes map[string]*AssignmentRuntime
 }
 
-func NewRegistry(ctx context.Context, deps Dependencies) *Registry {
+func NewRegistry(
+	ctx context.Context,
+	docker *adapters.DockerAdapter,
+	etcd *adapters.Store,
+	http *adapters.ListenerAdapter,
+	osa *adapters.OsAdapter,
+	ts *adapters.TailscaleAdapter,
+) *Registry {
 	return &Registry{
 		ctx:      ctx,
-		deps:     deps,
+		dcr:      docker,
+		etcd:     etcd,
+		http:     http,
+		osa:      osa,
+		ts:       ts,
 		runtimes: make(map[string]*AssignmentRuntime),
 	}
 }
 
 func (r *Registry) InitializeStore() error {
-	store, err := adapters.NewStore(r.ctx, config.EtcdEndpoint)
-	if err != nil {
-		return fmt.Errorf("failed to initialize store: %w", err)
-	}
-
-	r.mu.Lock()
-	r.str = store
-	r.mu.Unlock()
+	r.etcd.Connect(r.ctx, config.EtcdEndpoint)
 	return nil
 }
 
@@ -58,7 +58,7 @@ func (r *Registry) Start(a *models.Assignment, s *concurrency.Session) error {
 	}
 
 	r.mu.Lock()
-	if a.Role != "node" && r.str == nil {
+	if a.Role != "node" && r.etcd == nil {
 		r.mu.Unlock()
 		return fmt.Errorf("store not initialized")
 	}
@@ -68,7 +68,7 @@ func (r *Registry) Start(a *models.Assignment, s *concurrency.Session) error {
 		return nil
 	}
 
-	rn, err := r.runner(a.Role, r.str)
+	rn, err := r.runner(a.Role)
 	if err != nil {
 		r.mu.Unlock()
 		return err
@@ -119,34 +119,21 @@ func (r *Registry) ActiveAssignments() map[string]bool {
 	return active
 }
 
-func (r *Registry) runner(role string, str any) (RoleRunner, error) {
+func (r *Registry) runner(role string) (RoleRunner, error) {
 	switch role {
 	case "node":
-		return NewNodeRole(r, r.deps.Docker, r.deps.Os, r.deps.Listener, r.deps.Speaker), nil
+		return roles.NewNodeRole(r, r.dcr, r.osa, r.http, r.http), nil
 
 	case "member":
-		s, ok := str.(MemberStore)
-		if !ok {
-			return nil, fmt.Errorf("invalid MemberStore")
-		}
-		return &MemberRole{store: s, registry: r}, nil
+		return roles.NewMemberRole(r.etcd, r), nil
 
 	case "leader":
-		s, ok := str.(LeaderStore)
-		if !ok {
-			return nil, fmt.Errorf("invalid LeaderStore")
-		}
-		return &LeaderRole{store: s}, nil
+		return roles.NewLeaderRole(r.etcd), nil
 
 	case "tailscale-manager":
-		s, ok := str.(TsManagerStore)
-		if !ok {
-			return nil, fmt.Errorf("invalid TsManagerStore")
-		}
-		return &TSMgr{
-			str: s,
-			cli: &http.Client{Timeout: config.Timeout},
-		}, nil
+		return roles.NewTSMgr(
+			r.etcd,
+		), nil
 
 	default:
 		return nil, fmt.Errorf("unknown role: %s", role)

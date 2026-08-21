@@ -16,7 +16,7 @@ import (
 
 type MemberRole struct {
 	store    MemberStore
-	registry *Registry
+	registry RegistryInterface
 }
 
 func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess *concurrency.Session) error {
@@ -288,4 +288,11 @@ type event struct {
 	kind   eventType
 	ids    []string
 	hasIDs bool
+}
+
+func NewMemberRole(store MemberStore, registry RegistryInterface) *MemberRole {
+	return &MemberRole{
+		store:    store,
+		registry: registry,
+	}
 }

@@ -17,7 +17,7 @@ type NodeRole struct {
 	osa OsCreature
 	cms ListenerCreature
 	spk SpeakerCreature
-	reg *Registry
+	reg RegistryInterface
 }
 
 func (n *NodeRole) Run(ctx context.Context, a *models.Assignment, s *concurrency.Session) error {
@@ -154,7 +154,7 @@ type DockerCreature interface {
 	ResetEtcd(ctx context.Context) error
 }
 
-func NewNodeRole(reg *Registry, dcr DockerCreature, osa OsCreature, cms ListenerCreature, spk SpeakerCreature) *NodeRole {
+func NewNodeRole(reg RegistryInterface, dcr DockerCreature, osa OsCreature, cms ListenerCreature, spk SpeakerCreature) *NodeRole {
 	n := &NodeRole{reg: reg, dcr: dcr, osa: osa, cms: cms, spk: spk}
 	n.cms.RegisterHandler("/initialize", n.handleInit)
 	n.cms.RegisterHandler("/assimilate", n.handleAssimilate)

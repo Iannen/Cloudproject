@@ -101,3 +101,8 @@ func (l *LeaderRole) pickNode(nodes []string, existing []models.Assignment) stri
 	}
 	return best
 }
+func NewLeaderRole(store LeaderStore) *LeaderRole {
+	return &LeaderRole{
+		store: store,
+	}
+}

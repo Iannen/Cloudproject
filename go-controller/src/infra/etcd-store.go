@@ -16,7 +16,11 @@ type Store struct {
 	cli *clientv3.Client
 }
 
-func NewStore(ctx context.Context, endpoint string) (*Store, error) {
+func NewStore() *Store {
+	return &Store{}
+}
+
+func (s *Store) Connect(ctx context.Context, endpoint string) error {
 	for i := 0; i < config.StartupRetries; i++ {
 		cli, err := clientv3.New(clientv3.Config{
 			Endpoints:   []string{endpoint},
@@ -27,18 +31,20 @@ func NewStore(ctx context.Context, endpoint string) (*Store, error) {
 			_, err = cli.Status(sCtx, endpoint)
 			cancel()
 			if err == nil {
-				return &Store{cli: cli}, nil
+				s.cli = cli
+				return nil
 			}
 			cli.Close()
 		}
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return ctx.Err()
 		case <-time.After(config.StartupInterval):
 		}
 	}
-	return nil, fmt.Errorf("etcd connection failed after retries")
+	return fmt.Errorf("etcd connection failed after retries")
 }
+
 func (s *Store) CreateAssignment(ctx context.Context, a models.Assignment) error {
 	b, err := json.Marshal(a)
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
-	"go-controller/src/core/roles"
 	adapters "go-controller/src/infra"
 	"log"
 	"os"
@@ -19,15 +18,20 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	listener := adapters.NewListenerAdapter()
-	deps := roles.Dependencies{
-		Docker:   adapters.NewDockerAdapter(),
-		Os:       adapters.NewOsAdapter(),
-		Listener: listener,
-		Speaker:  listener,
-	}
+	docker := adapters.NewDockerAdapter()
+	etcd := adapters.NewStore()
+	http := adapters.NewListenerAdapter()
+	osa := adapters.NewOsAdapter()
+	ts := adapters.NewTailscaleAdapter()
 
-	reg := roles.NewRegistry(ctx, deps)
+	reg := NewRegistry(
+		ctx,
+		docker,
+		etcd,
+		http,
+		osa,
+		ts,
+	)
 
 	nodeAsg := &models.Assignment{
 		NodeID: nodeID,
