@@ -14,37 +14,6 @@ import (
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
-type MemberStore interface {
-	NodeAssignments(ctx context.Context, nodeID string) ([]string, int64, error)
-	WatchAssignments(ctx context.Context, nodeID string, rev int64) clientv3.WatchChan
-	AssignmentDef(ctx context.Context, assignmentID string) (*models.Assignment, error)
-	NewSession(ctx context.Context, ttl int64) (*concurrency.Session, error)
-	PutWithSession(ctx context.Context, sess *concurrency.Session, key string, value string) error
-	ClaimLeader(ctx context.Context, sess *concurrency.Session, nodeID string) (bool, error)
-	WatchLeaderKey(ctx context.Context, notifyChan chan<- struct{})
-}
-
-func NewMemberAssignment(nodeID string) *models.Assignment {
-	return &models.Assignment{
-		NodeID: nodeID,
-		ID:     "member-" + nodeID,
-		Role:   "member",
-	}
-}
-
-type eventType int
-
-const (
-	evtTick eventType = iota
-	evtWatch
-)
-
-type event struct {
-	kind   eventType
-	ids    []string
-	hasIDs bool
-}
-
 type MemberRole struct {
 	store    MemberStore
 	registry *Registry
@@ -288,4 +257,35 @@ func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, c
 			}
 		}
 	}
+}
+
+type MemberStore interface {
+	NodeAssignments(ctx context.Context, nodeID string) ([]string, int64, error)
+	WatchAssignments(ctx context.Context, nodeID string, rev int64) clientv3.WatchChan
+	AssignmentDef(ctx context.Context, assignmentID string) (*models.Assignment, error)
+	NewSession(ctx context.Context, ttl int64) (*concurrency.Session, error)
+	PutWithSession(ctx context.Context, sess *concurrency.Session, key string, value string) error
+	ClaimLeader(ctx context.Context, sess *concurrency.Session, nodeID string) (bool, error)
+	WatchLeaderKey(ctx context.Context, notifyChan chan<- struct{})
+}
+
+func NewMemberAssignment(nodeID string) *models.Assignment {
+	return &models.Assignment{
+		NodeID: nodeID,
+		ID:     "member-" + nodeID,
+		Role:   "member",
+	}
+}
+
+type eventType int
+
+const (
+	evtTick eventType = iota
+	evtWatch
+)
+
+type event struct {
+	kind   eventType
+	ids    []string
+	hasIDs bool
 }

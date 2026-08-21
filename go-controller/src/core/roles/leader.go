@@ -11,13 +11,9 @@ import (
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
-type LeaderStore interface {
-	GetActiveNodeIDs(ctx context.Context) ([]string, error)
-	GetAllAssignments(ctx context.Context) ([]models.Assignment, error)
-	CreateAssignment(ctx context.Context, a models.Assignment) error
+type LeaderRole struct {
+	store LeaderStore
 }
-
-type LeaderRole struct{ store LeaderStore }
 
 func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment, s *concurrency.Session) error {
 	tk := time.NewTicker(config.ReconcileInterval)
@@ -31,12 +27,12 @@ func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment, s *concurren
 			return nil
 		case <-tk.C:
 			log.Printf("[Leader] Ticker event received, running reconcile..")
-			reconcile(ctx, l.store)
+			l.reconcile(ctx, l.store)
 		}
 	}
 }
 
-func reconcile(ctx context.Context, str LeaderStore) {
+func (l *LeaderRole) reconcile(ctx context.Context, str LeaderStore) {
 	nodes, err := str.GetActiveNodeIDs(ctx)
 	if err != nil {
 		log.Printf("[Leader] Failed to fetch active nodes from etcd: %v", err)
@@ -67,7 +63,7 @@ func reconcile(ctx context.Context, str LeaderStore) {
 	for _, spec := range config.ClusterSpec {
 		curr := byRole[spec.Name]
 		for i := 0; i < spec.Replicas-len(curr); i++ {
-			node := pickNode(nodes, curr)
+			node := l.pickNode(nodes, curr)
 			if node == "" {
 				log.Printf("[Leader] No suitable node available for role %s", spec.Name)
 				break
@@ -82,7 +78,13 @@ func reconcile(ctx context.Context, str LeaderStore) {
 	}
 }
 
-func pickNode(nodes []string, existing []models.Assignment) string {
+type LeaderStore interface {
+	GetActiveNodeIDs(ctx context.Context) ([]string, error)
+	GetAllAssignments(ctx context.Context) ([]models.Assignment, error)
+	CreateAssignment(ctx context.Context, a models.Assignment) error
+}
+
+func (l *LeaderRole) pickNode(nodes []string, existing []models.Assignment) string {
 	if len(nodes) == 0 {
 		return ""
 	}

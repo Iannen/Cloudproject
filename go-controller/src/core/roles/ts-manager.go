@@ -17,30 +17,11 @@ import (
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
-type TsManagerStore interface {
-	GetClusterMembers(ctx context.Context) ([]models.MemberInfo, error)
-	AddLearner(ctx context.Context, peerURL string) (*models.MemberInfo, []models.MemberInfo, error)
-	PromoteMember(ctx context.Context, memberID uint64) error
-	RemoveMember(ctx context.Context, memberID uint64) error
-}
-
 type TSMgr struct {
 	str TsManagerStore
 	cli *http.Client
 }
 
-/*
-	type TSPeer struct {
-		HostName     string   `json:"HostName"`
-		TailscaleIPs []string `json:"TailscaleIPs"`
-		Online       bool     `json:"Online"`
-	}
-
-	type TSStatus struct {
-		Peer map[string]*TSPeer `json:"Peer"`
-		Self *TSPeer            `json:"Self"`
-	}
-*/
 func (t *TSMgr) Run(ctx context.Context, a *models.Assignment, s *concurrency.Session) error {
 	tk := time.NewTicker(config.ReconcileInterval)
 	defer tk.Stop()
@@ -199,4 +180,11 @@ func (t *TSMgr) localIP(ctx context.Context) (string, error) {
 		return ip, nil
 	}
 	return "", fmt.Errorf("empty tailscale ip")
+}
+
+type TsManagerStore interface {
+	GetClusterMembers(ctx context.Context) ([]models.MemberInfo, error)
+	AddLearner(ctx context.Context, peerURL string) (*models.MemberInfo, []models.MemberInfo, error)
+	PromoteMember(ctx context.Context, memberID uint64) error
+	RemoveMember(ctx context.Context, memberID uint64) error
 }
