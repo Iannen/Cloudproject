@@ -128,7 +128,7 @@ func (n *NodeRole) activateMember() error {
 		ID:     "member-" + id,
 		Role:   "member",
 	}
-	return n.reg.Start(assignment, nil)
+	return n.reg.Start(assignment)
 }
 
 func (n *NodeRole) InitializeStore() error {

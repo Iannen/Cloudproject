@@ -9,8 +9,6 @@ import (
 	adapters "go-controller/src/infra"
 	"log"
 	"sync"
-
-	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
 type RoleRunner interface {
@@ -52,7 +50,7 @@ func (r *Registry) InitializeStore() error {
 	return nil
 }
 
-func (r *Registry) Start(a *models.Assignment, s *concurrency.Session) error {
+func (r *Registry) Start(a *models.Assignment) error {
 	if a == nil {
 		return fmt.Errorf("assignment is nil")
 	}
@@ -78,7 +76,7 @@ func (r *Registry) Start(a *models.Assignment, s *concurrency.Session) error {
 	r.runtimes[a.ID] = rt
 	r.mu.Unlock()
 
-	rt.Start(r.ctx, rn, s)
+	rt.Start(r.ctx, rn)
 	return nil
 }
 
@@ -160,7 +158,6 @@ func NewAssignmentRuntime(asg *models.Assignment) *AssignmentRuntime {
 func (r *AssignmentRuntime) Start(
 	parentCtx context.Context,
 	runner RoleRunner,
-	sess *concurrency.Session,
 ) {
 	ctx, cancel := context.WithCancel(parentCtx)
 	r.CancelFunc = cancel

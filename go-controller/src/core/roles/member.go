@@ -66,7 +66,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 				ID:     "leader-" + nodeID,
 				Role:   "leader",
 			}
-			if err := m.registry.Start(leaderAsg, sess); err != nil {
+			if err := m.registry.Start(leaderAsg); err != nil {
 				log.Printf("[Member] Failed to start leader role: %v", err)
 			}
 		} else {
@@ -81,7 +81,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 			continue
 		}
 
-		m.reconcile(sCtx, initIDs, sess)
+		m.reconcile(sCtx, initIDs)
 
 		m.startWatch(sCtx, nodeID, rev, ch)
 		m.startTicker(sCtx, ch)
@@ -114,7 +114,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 					targets = ids
 				}
 
-				m.reconcile(sCtx, targets, sess)
+				m.reconcile(sCtx, targets)
 			}
 		}
 
@@ -126,7 +126,6 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 func (m *MemberRole) reconcile(
 	ctx context.Context,
 	ids []string,
-	sess *concurrency.Session,
 ) {
 	log.Printf("[Member] enter reconcile")
 	want := make(map[string]bool, len(ids))
@@ -153,7 +152,7 @@ func (m *MemberRole) reconcile(
 				continue
 			}
 
-			if err := m.registry.Start(asg, sess); err != nil {
+			if err := m.registry.Start(asg); err != nil {
 				log.Printf("[Member] start assignment failed id=%s role=%s: %v", id, asg.Role, err)
 				continue
 			}

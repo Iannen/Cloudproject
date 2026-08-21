@@ -39,7 +39,7 @@ func main() {
 		Role:   "node",
 	}
 
-	if err := reg.Start(nodeAsg, nil); err != nil {
+	if err := reg.Start(nodeAsg); err != nil {
 		log.Fatalf("[Main] Failed to start base node role: %v", err)
 	}
 
