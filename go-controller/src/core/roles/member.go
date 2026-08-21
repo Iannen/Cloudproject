@@ -105,7 +105,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment, sess *conc
 				ID:     "leader-" + nodeID,
 				Role:   "leader",
 			}
-			if err := m.registry.Start(sCtx, leaderAsg, sess); err != nil {
+			if err := m.registry.Start(leaderAsg, sess); err != nil {
 				log.Printf("[Member] Failed to start leader role: %v", err)
 			}
 		} else {
@@ -287,7 +287,7 @@ func (m *MemberRole) reconcile(
 				continue
 			}
 
-			if err := m.registry.Start(ctx, asg, sess); err != nil {
+			if err := m.registry.Start(asg, sess); err != nil {
 				log.Printf("[Member] start assignment failed id=%s role=%s: %v", id, asg.Role, err)
 				continue
 			}

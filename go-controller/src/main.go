@@ -13,12 +13,12 @@ import (
 )
 
 func main() {
-	log.Printf("[Main] Starting controller node with ID: %s", config.NodeID())
+	log.Printf("[Main] Fresh Starting controller node with ID: %s", config.NodeID())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	reg := roles.NewRegistry()
+	reg := roles.NewRegistry(ctx)
 
 	dcr := adapters.NewDockerAdapter()
 	osa := adapters.NewOsAdapter()

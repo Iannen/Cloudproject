@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
 
 	"cloud-controller/src/core/config"
 	"cloud-controller/src/core/models"
+	adapters "cloud-controller/src/infra"
 
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
@@ -18,40 +18,47 @@ type RoleRunner interface {
 }
 
 type Registry struct {
-	mu  sync.RWMutex
+	ctx context.Context
+	//mu  sync.RWMutex
 	str any
 }
 
-func NewRegistry() *Registry {
-	return &Registry{}
+func NewRegistry(ctx context.Context) *Registry {
+	return &Registry{
+		ctx: ctx,
+	}
 }
 
-func (r *Registry) SetStore(str any) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.str = str
+func (r *Registry) InitializeStore() error {
+	store, err := adapters.NewStore(r.ctx, config.EtcdEndpoint)
+	if err != nil {
+		return fmt.Errorf("failed to initialize store: %w", err)
+	}
+
+	r.str = store
+	return nil
 }
 
-func (r *Registry) Start(ctx context.Context, a *models.Assignment, s *concurrency.Session) error {
+func (r *Registry) Start(a *models.Assignment, s *concurrency.Session) error {
 	if a == nil {
 		return fmt.Errorf("assignment is nil")
 	}
 
-	r.mu.RLock()
-	str := r.str
-	r.mu.RUnlock()
+	//r.mu.RLock()
+	//str := r.str
+	//r.mu.RUnlock()
 
-	if str == nil {
+	if r.str == nil {
 		return fmt.Errorf("store not initialized")
 	}
 
-	rn, err := r.runner(a.Role, str)
+	rn, err := r.runner(a.Role, r.str)
 	if err != nil {
 		return err
 	}
 
 	go func() {
-		if err := rn.Run(ctx, a, s); err != nil && ctx.Err() == nil {
+		if err := rn.Run(r.ctx, a, s); err != nil && r.ctx.Err() == nil {
 			log.Printf("[%s] Exited with error: %v", a.Role, err)
 		}
 	}()
