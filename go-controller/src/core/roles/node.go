@@ -19,7 +19,7 @@ type NodeRole struct {
 	reg RoleMgr
 }
 
-func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) error {
+func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) {
 	log.Printf("[NodeRole] Starting HTTP listener on %s for node %s", config.HTTPPort, a.NodeID)
 	n.cms.Start(config.HTTPPort, config.Timeout)
 
@@ -31,9 +31,8 @@ func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) error {
 
 	if err := n.cms.Shutdown(shutdownCtx); err != nil {
 		log.Printf("[NodeRole] Error during HTTP shutdown: %v", err)
-		return err
+		return
 	}
-	return nil
 }
 
 func (n *NodeRole) httpErr(w http.ResponseWriter, msg string, code int) {

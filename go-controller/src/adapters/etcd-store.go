@@ -227,3 +227,17 @@ func (s *Store) GetClusterMembers(ctx context.Context) ([]models.MemberInfo, err
 	}
 	return res, nil
 }
+
+func (s *Store) GetClusterPeerURLs(ctx context.Context) (map[string]bool, error) {
+	members, err := s.GetClusterMembers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]bool, len(members))
+	for _, m := range members {
+		for _, u := range m.PeerURLs {
+			seen[u] = true
+		}
+	}
+	return seen, nil
+}

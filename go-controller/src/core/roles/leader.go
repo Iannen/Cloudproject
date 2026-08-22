@@ -13,7 +13,7 @@ type LeaderRole struct {
 	store AssignmentStore
 }
 
-func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment) error {
+func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment) {
 	tk := time.NewTicker(config.ReconcileInterval)
 	defer tk.Stop()
 
@@ -22,7 +22,7 @@ func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment) error {
 		select {
 		case <-ctx.Done():
 			log.Printf("[Leader] Context canceled, stopping leader role (%s): %v", a.ID, ctx.Err())
-			return nil
+			return
 		case <-tk.C:
 			log.Printf("[Leader] Ticker event received, running reconcile..")
 			l.reconcile(ctx, l.store)

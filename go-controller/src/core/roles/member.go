@@ -19,7 +19,7 @@ type MemberRole struct {
 	registry RoleMgr
 }
 
-func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
+func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 	nodeID := config.NodeID()
 	log.Printf("[Member] Permanent member role started for node %s", nodeID)
 
@@ -27,7 +27,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 		select {
 		case <-ctx.Done():
 			m.registry.StopAll()
-			return nil
+			return
 		default:
 		}
 
@@ -36,7 +36,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 			log.Printf("[Member] Failed to establish fresh session: %v. Retrying in 2 seconds...", err)
 			select {
 			case <-ctx.Done():
-				return nil
+				return
 			case <-time.After(config.RetryInterval):
 			}
 			continue
@@ -90,7 +90,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 				cancel()
 				m.registry.StopAll()
 				_ = sess.Close()
-				return nil
+				return
 
 			case <-sess.Done():
 				log.Println("[Member] CRITICAL: Session lease lost! Evicting child roles...")

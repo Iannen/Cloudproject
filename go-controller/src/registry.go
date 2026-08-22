@@ -7,12 +7,11 @@ import (
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"go-controller/src/core/roles"
-	"log"
 	"sync"
 )
 
 type RoleRunner interface {
-	Run(ctx context.Context, asg *models.Assignment) error
+	Run(ctx context.Context, asg *models.Assignment)
 }
 
 type Registry struct {
@@ -143,7 +142,7 @@ func (r *Registry) runner(role string) (RoleRunner, error) {
 		return roles.NewLeaderRole(r.etcd), nil
 
 	case "tailscale-manager":
-		return roles.NewTSMgr(
+		return roles.NewRecruiter(
 			r.etcd,
 			r.ts,
 			r.httpCli,
@@ -180,10 +179,7 @@ func (r *AssignmentRuntime) Start(
 		defer close(r.DoneChan)
 		defer cancel()
 
-		err := runner.Run(ctx, r.Definition)
-		if err != nil && ctx.Err() == nil {
-			log.Printf("[Runtime] execution failed id=%s role=%s: %v", r.AssignmentID, r.Definition.Role, err)
-		}
+		runner.Run(ctx, r.Definition)
 	}()
 }
 

@@ -44,3 +44,8 @@ XII: Consolidated Data Models, Enforced Package Isolation, and Cleaned Up Interf
     - Centralized Domain Entities, Cluster Config, DTOs/RPC, and External Integration models into `models/models.go`.
     - Updated `config.go` to consume `models.RoleSpec` and preserved unexported scope for internal runtime types.
     - Standardized interface and dependency naming across core role components (`RoleMgr`, `ParticipantStore`, `AssignmentStore`, `ClusterMgr`, `DockerMgr`, `FileMgr`, `HTTPServer`, `HealthChecker`, `TailscaleMgr`, `RpcClient`).
+
+XIII: NodeRole.handleInit Idempotency Upgrade
+    - Replaced docker-based `IsEtcdRunning` check with internal state query via `n.reg.IsActive("member-" + nodeID)`.
+    - Added `IsActive` method to `RoleMgr` interface and `Registry`.
+    - Cleaned up unused `IsEtcdRunning` interface methods.

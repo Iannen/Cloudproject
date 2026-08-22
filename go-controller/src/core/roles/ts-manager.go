@@ -10,17 +10,18 @@ import (
 	"time"
 )
 
-type TailscaleMgr interface {
+type TSClient interface {
 	GetPeers(ctx context.Context) ([]*models.TSPeer, error)
 	GetLocalIP(ctx context.Context) (string, error)
 }
-type TSMgr struct {
+
+type Recruiter struct {
 	str  ClusterMgr
-	ts   TailscaleMgr
+	ts   TSClient
 	http RpcClient
 }
 
-func (t *TSMgr) Run(ctx context.Context, a *models.Assignment) error {
+func (t *Recruiter) Run(ctx context.Context, a *models.Assignment) {
 	tk := time.NewTicker(config.ReconcileInterval)
 	defer tk.Stop()
 
@@ -28,31 +29,24 @@ func (t *TSMgr) Run(ctx context.Context, a *models.Assignment) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return
 		case <-tk.C:
-			t.reconcile(ctx)
+			if err := t.reconcile(ctx); err != nil {
+				log.Println(err)
+			}
 		}
 	}
 }
 
-func (t *TSMgr) reconcile(ctx context.Context) {
-	members, err := t.str.GetClusterMembers(ctx)
+func (t *Recruiter) reconcile(ctx context.Context) error {
+	seenIPs, err := t.str.GetClusterPeerURLs(ctx)
 	if err != nil {
-		log.Printf("[TSMgr] Cluster member lookup failed: %v", err)
-		return
-	}
-
-	seenIPs := make(map[string]bool)
-	for _, m := range members {
-		for _, u := range m.PeerURLs {
-			seenIPs[u] = true
-		}
+		return fmt.Errorf("[TSMgr] cluster member lookup failed: %w", err)
 	}
 
 	peers, err := t.ts.GetPeers(ctx)
 	if err != nil {
-		log.Printf("[TSMgr] Peer discovery failed: %v", err)
-		return
+		return fmt.Errorf("[TSMgr] peer discovery failed: %w", err)
 	}
 
 	for _, p := range peers {
@@ -65,22 +59,25 @@ func (t *TSMgr) reconcile(ctx context.Context) {
 			continue
 		}
 
-		t.assimilate(ctx, p)
+		if err := t.recruit(ctx, p); err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
-func (t *TSMgr) assimilate(ctx context.Context, p *models.TSPeer) {
+func (t *Recruiter) recruit(ctx context.Context, p *models.TSPeer) error {
 	ip := p.TailscaleIPs[0]
+
 	locIP, err := t.ts.GetLocalIP(ctx)
 	if err != nil {
-		log.Printf("[TSMgr] Local IP lookup failed: %v", err)
-		return
+		return fmt.Errorf("[TSMgr] host=%s step=get_local_ip: %w", p.HostName, err)
 	}
 
 	l, mems, err := t.str.AddLearner(ctx, fmt.Sprintf("http://%s:%d", ip, config.EtcdPeerPort))
 	if err != nil {
-		log.Printf("[TSMgr] assimilation failed host=%s step=add_learner: %v", p.HostName, err)
-		return
+		return fmt.Errorf("[TSMgr] host=%s step=add_learner: %w", p.HostName, err)
 	}
 
 	lid := l.ID
@@ -109,28 +106,26 @@ func (t *TSMgr) assimilate(ctx context.Context, p *models.TSPeer) {
 	}
 
 	if err := t.http.Assimilate(ctx, ip, payload); err != nil {
-		log.Printf("[TSMgr] assimilation failed host=%s step=assimilate_rpc: %v", p.HostName, err)
-		return
+		return fmt.Errorf("[TSMgr] host=%s step=assimilate_rpc: %w", p.HostName, err)
 	}
 
 	time.Sleep(2 * time.Second)
 
 	if err := t.str.PromoteMember(ctx, lid); err != nil {
-		log.Printf("[TSMgr] assimilation failed host=%s step=promote: %v", p.HostName, err)
-		return
+		return fmt.Errorf("[TSMgr] host=%s step=promote: %w", p.HostName, err)
 	}
 	lid = 0
 
 	if err := t.http.Activate(ctx, ip); err != nil {
-		log.Printf("[TSMgr] assimilation failed host=%s step=activate_rpc: %v", p.HostName, err)
-		return
+		return fmt.Errorf("[TSMgr] host=%s step=activate_rpc: %w", p.HostName, err)
 	}
 
 	log.Printf("[TSMgr] assimilated and activated host=%s ip=%s", p.HostName, ip)
+	return nil
 }
 
-func NewTSMgr(str ClusterMgr, ts TailscaleMgr, http RpcClient) *TSMgr {
-	return &TSMgr{
+func NewRecruiter(str ClusterMgr, ts TSClient, http RpcClient) *Recruiter {
+	return &Recruiter{
 		str:  str,
 		ts:   ts,
 		http: http,
@@ -143,7 +138,7 @@ type RpcClient interface {
 }
 
 type ClusterMgr interface {
-	GetClusterMembers(ctx context.Context) ([]models.MemberInfo, error)
+	GetClusterPeerURLs(ctx context.Context) (map[string]bool, error)
 	AddLearner(ctx context.Context, peerURL string) (*models.MemberInfo, []models.MemberInfo, error)
 	PromoteMember(ctx context.Context, memberID uint64) error
 	RemoveMember(ctx context.Context, memberID uint64) error
