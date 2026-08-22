@@ -8,6 +8,7 @@ import (
 	"go-controller/src/core/models"
 	"log"
 	"net/http"
+	"time"
 )
 
 type NodeRole struct {
@@ -20,7 +21,7 @@ type NodeRole struct {
 
 func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) error {
 	log.Printf("[NodeRole] Starting HTTP listener on %s for node %s", config.HTTPPort, a.NodeID)
-	n.cms.Start(config.HTTPPort)
+	n.cms.Start(config.HTTPPort, config.Timeout)
 
 	<-ctx.Done()
 
@@ -45,20 +46,19 @@ func (n *NodeRole) handleInit(w http.ResponseWriter, r *http.Request) {
 		n.httpErr(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
 	id := config.NodeID()
-	if running, err := n.dcr.IsEtcdRunning(r.Context()); err == nil && running {
+	if running, err := n.dcr.IsEtcdRunning(r.Context(), config.BootstrapDir); err == nil && running {
 		fmt.Fprintf(w, "Node %s already initialized.\n", id)
 		return
 	}
 
-	_ = n.dcr.ResetEtcd(r.Context())
-	if err := n.dcr.StartEtcd(r.Context()); err != nil {
+	_ = n.dcr.ResetEtcd(r.Context(), config.BootstrapDir)
+	if err := n.dcr.StartEtcd(r.Context(), config.BootstrapDir); err != nil {
 		n.httpErr(w, fmt.Sprintf("etcd start failed: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	if err := n.spk.WaitEndpointReady(r.Context(), config.EtcdEndpoint); err != nil {
+	if err := n.spk.WaitEndpointReady(r.Context(), config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil {
 		n.httpErr(w, "etcd ready check failed", http.StatusInternalServerError)
 		return
 	}
@@ -83,18 +83,18 @@ func (n *NodeRole) handleAssimilate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := n.osa.WriteEnvConfig(r.Context(), p); err != nil {
+	if err := n.osa.WriteEnvConfig(r.Context(), config.NodeID(), config.BootstrapDir, p); err != nil {
 		n.httpErr(w, "config write failed", http.StatusInternalServerError)
 		return
 	}
 
-	_ = n.dcr.ResetEtcd(r.Context())
-	if err := n.dcr.StartEtcd(r.Context()); err != nil {
+	_ = n.dcr.ResetEtcd(r.Context(), config.BootstrapDir)
+	if err := n.dcr.StartEtcd(r.Context(), config.BootstrapDir); err != nil {
 		n.httpErr(w, fmt.Sprintf("etcd start failed: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	if err := n.spk.WaitEndpointReady(r.Context(), config.EtcdEndpoint); err != nil {
+	if err := n.spk.WaitEndpointReady(r.Context(), config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil {
 		if r.Context().Err() != nil {
 			n.httpErr(w, "timeout", http.StatusRequestTimeout)
 			return
@@ -137,19 +137,20 @@ func (n *NodeRole) InitializeStore() error {
 
 type ListenerCreature interface {
 	RegisterHandler(pattern string, handler http.HandlerFunc)
-	Start(addr string)
+	Start(addr string, clientTimeout time.Duration)
 	Shutdown(ctx context.Context) error
 }
 type SpeakerCreature interface {
-	WaitEndpointReady(ctx context.Context, endpoint string) error
+	WaitEndpointReady(ctx context.Context, endpoint string, retries int, interval time.Duration) error
 }
 type OsCreature interface {
-	WriteEnvConfig(ctx context.Context, payload models.AssimilatePayload) error
+	WriteEnvConfig(ctx context.Context, nodeID string, bootstrapDir string, payload models.AssimilatePayload) error
 }
+
 type DockerCreature interface {
-	IsEtcdRunning(ctx context.Context) (bool, error)
-	StartEtcd(ctx context.Context) error
-	ResetEtcd(ctx context.Context) error
+	IsEtcdRunning(ctx context.Context, bootstrapDir string) (bool, error)
+	StartEtcd(ctx context.Context, bootstrapDir string) error
+	ResetEtcd(ctx context.Context, bootstrapDir string) error
 }
 
 func NewNodeRole(reg RegistryInterface, dcr DockerCreature, osa OsCreature, cms ListenerCreature, spk SpeakerCreature) *NodeRole {

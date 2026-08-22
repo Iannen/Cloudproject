@@ -46,8 +46,13 @@ func NewRegistry(
 }
 
 func (r *Registry) InitializeStore() error {
-	r.etcd.Connect(r.ctx, config.EtcdEndpoint)
-	return nil
+	return r.etcd.Connect(
+		r.ctx,
+		config.EtcdEndpoint,
+		config.Timeout,
+		config.StartupInterval,
+		config.StartupRetries,
+	)
 }
 
 func (r *Registry) Start(a *models.Assignment) error {

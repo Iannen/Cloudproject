@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"log"
 	"net"
@@ -30,13 +29,13 @@ func (l *ListenerAdapter) RegisterHandler(pattern string, handler http.HandlerFu
 	l.mux.HandleFunc(pattern, handler)
 }
 
-func (l *ListenerAdapter) Start(addr string) {
+func (l *ListenerAdapter) Start(addr string, clientTimeout time.Duration) {
 	l.srv = &http.Server{
 		Addr:    addr,
 		Handler: l.mux,
 	}
 	l.cli = &http.Client{
-		Timeout: config.Timeout,
+		Timeout: clientTimeout,
 	}
 	log.Printf("[HTTP Listener] Running on %s", addr)
 	go func() {
@@ -53,9 +52,9 @@ func (l *ListenerAdapter) Shutdown(ctx context.Context) error {
 	return l.srv.Shutdown(ctx)
 }
 
-func (l *ListenerAdapter) WaitEndpointReady(ctx context.Context, endpoint string) error {
-	for i := 0; i < config.StartupRetries; i++ {
-		c, err := net.DialTimeout("tcp", endpoint, config.StartupInterval)
+func (l *ListenerAdapter) WaitEndpointReady(ctx context.Context, endpoint string, retries int, interval time.Duration) error {
+	for i := 0; i < retries; i++ {
+		c, err := net.DialTimeout("tcp", endpoint, interval)
 		if err == nil {
 			_ = c.Close()
 			return nil
@@ -64,10 +63,10 @@ func (l *ListenerAdapter) WaitEndpointReady(ctx context.Context, endpoint string
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(config.StartupInterval):
+		case <-time.After(interval):
 		}
 	}
-	return fmt.Errorf("endpoint %s not ready after retries", endpoint)
+	return fmt.Errorf("endpoint %s not ready after %d retries", endpoint, retries)
 }
 
 func (t *ListenerAdapter) Post(ctx context.Context, url string, body []byte) bool {

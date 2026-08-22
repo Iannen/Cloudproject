@@ -51,7 +51,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 			continue
 		}
 
-		isLeader, err := m.store.ClaimLeader(sCtx, sess, nodeID)
+		isLeader, err := m.store.ClaimLeader(sCtx, sess, config.ClusterLeaderKey, nodeID)
 		if err != nil {
 			log.Printf("[Member] Leader check failed: %v", err)
 		}
@@ -66,11 +66,9 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 			if err := m.registry.Start(leaderAsg); err != nil {
 				log.Printf("[Member] Failed to start leader role: %v", err)
 			}
-		} /*else {
-			m.startLeaderWatcher(sCtx, ch)
-		}*/
+		}
 
-		initIDs, rev, err := m.store.NodeAssignments(sCtx, nodeID)
+		initIDs, rev, err := m.store.NodeAssignments(sCtx, config.NodeAssignmentsPath(nodeID))
 		if err != nil {
 			log.Printf("[Member] Error fetching initial bootstrap assignments: %v. Resetting session...", err)
 			cancel()
@@ -105,7 +103,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
 				if e.kind == evtWatch && e.hasIDs {
 					targets = e.ids
 				} else {
-					ids, _, err := m.store.NodeAssignments(sCtx, nodeID)
+					ids, _, err := m.store.NodeAssignments(sCtx, config.NodeAssignmentsPath(nodeID))
 					if err != nil {
 						log.Printf("[Member] Error updating assignment state from ticker: %v", err)
 						continue
@@ -145,7 +143,7 @@ func (m *MemberRole) reconcile(
 
 	for _, id := range ids {
 		if !active[id] {
-			asg, err := m.store.AssignmentDef(ctx, id)
+			asg, err := m.store.AssignmentDef(ctx, config.AsgDefPath(id))
 			if err != nil {
 				log.Printf("[Member] fetch assignment def failed id=%s: %v", id, err)
 				continue
@@ -180,7 +178,7 @@ func (m *MemberRole) startTicker(ctx context.Context, ch chan<- event) {
 
 func (m *MemberRole) startLeaderWatcher(ctx context.Context, ch chan<- event) {
 	delCh := make(chan struct{}, 1)
-	go m.store.WatchLeaderKey(ctx, delCh)
+	go m.store.WatchLeaderKey(ctx, config.ClusterLeaderKey, delCh)
 
 	go func() {
 		select {
@@ -213,7 +211,7 @@ func (m *MemberRole) startWatch(ctx context.Context, nodeID string, rev int64, c
 	}()
 }
 func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, ch chan<- event) bool {
-	wCh := m.store.WatchAssignments(ctx, nodeID, *rev+1)
+	wCh := m.store.WatchAssignments(ctx, config.NodeAssignmentsPath(nodeID), *rev+1)
 
 	for {
 		select {
@@ -254,13 +252,13 @@ func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, c
 }
 
 type MemberStore interface {
-	NodeAssignments(ctx context.Context, nodeID string) ([]string, int64, error)
-	WatchAssignments(ctx context.Context, nodeID string, rev int64) clientv3.WatchChan
-	AssignmentDef(ctx context.Context, assignmentID string) (*models.Assignment, error)
+	NodeAssignments(ctx context.Context, nodeAsgPath string) ([]string, int64, error)
+	WatchAssignments(ctx context.Context, nodeAsgPath string, rev int64) clientv3.WatchChan
+	AssignmentDef(ctx context.Context, asgDefPath string) (*models.Assignment, error)
 	NewSession(ctx context.Context, ttl int64) (*concurrency.Session, error)
 	PutWithSession(ctx context.Context, sess *concurrency.Session, key string, value string) error
-	ClaimLeader(ctx context.Context, sess *concurrency.Session, nodeID string) (bool, error)
-	WatchLeaderKey(ctx context.Context, notifyChan chan<- struct{})
+	ClaimLeader(ctx context.Context, sess *concurrency.Session, leaderKey, nodeID string) (bool, error)
+	WatchLeaderKey(ctx context.Context, leaderKey string, notifyChan chan<- struct{})
 }
 
 func NewMemberAssignment(nodeID string) *models.Assignment {

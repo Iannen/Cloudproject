@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"time"
 
@@ -20,38 +19,43 @@ func NewStore() *Store {
 	return &Store{}
 }
 
-func (s *Store) Connect(ctx context.Context, endpoint string) error {
-	for i := 0; i < config.StartupRetries; i++ {
+func (s *Store) Connect(ctx context.Context, endpoint string, timeout, interval time.Duration, retries int) error {
+	var lastErr error
+	for i := 0; i < retries; i++ {
 		cli, err := clientv3.New(clientv3.Config{
 			Endpoints:   []string{endpoint},
-			DialTimeout: config.Timeout,
+			DialTimeout: timeout,
 		})
 		if err == nil {
-			sCtx, cancel := context.WithTimeout(ctx, config.Timeout)
+			sCtx, cancel := context.WithTimeout(ctx, timeout)
 			_, err = cli.Status(sCtx, endpoint)
 			cancel()
 			if err == nil {
 				s.cli = cli
 				return nil
 			}
+			lastErr = fmt.Errorf("etcd status check failed: %w", err)
 			cli.Close()
+		} else {
+			lastErr = fmt.Errorf("etcd client creation failed: %w", err)
 		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(config.StartupInterval):
+		case <-time.After(interval):
 		}
 	}
-	return fmt.Errorf("etcd connection failed after retries")
+	return fmt.Errorf("etcd connection failed after %d retries: %w", retries, lastErr)
 }
 
-func (s *Store) CreateAssignment(ctx context.Context, a models.Assignment) error {
+func (s *Store) CreateAssignment(ctx context.Context, asgDefPath, nodeAsgPath string, a models.Assignment) error {
 	b, err := json.Marshal(a)
 	if err != nil {
 		return fmt.Errorf("marshal asg: %w", err)
 	}
 
-	ids, _, err := s.NodeAssignments(ctx, a.NodeID)
+	ids, _, err := s.NodeAssignments(ctx, nodeAsgPath)
 	if err != nil {
 		return fmt.Errorf("get node asgs: %w", err)
 	}
@@ -73,8 +77,8 @@ func (s *Store) CreateAssignment(ctx context.Context, a models.Assignment) error
 	}
 
 	_, err = s.cli.Txn(ctx).Then(
-		clientv3.OpPut(config.AsgDefPath(a.ID), string(b)),
-		clientv3.OpPut(config.NodeAssignmentsPath(a.NodeID), string(idsB)),
+		clientv3.OpPut(asgDefPath, string(b)),
+		clientv3.OpPut(nodeAsgPath, string(idsB)),
 	).Commit()
 	if err != nil {
 		return fmt.Errorf("etcd txn: %w", err)
@@ -91,13 +95,13 @@ func (s *Store) PutWithSession(ctx context.Context, sess *concurrency.Session, k
 	return err
 }
 
-func (s *Store) AssignmentDef(ctx context.Context, id string) (*models.Assignment, error) {
-	resp, err := s.cli.Get(ctx, config.AsgDefPath(id))
+func (s *Store) AssignmentDef(ctx context.Context, asgDefPath string) (*models.Assignment, error) {
+	resp, err := s.cli.Get(ctx, asgDefPath)
 	if err != nil {
 		return nil, err
 	}
 	if len(resp.Kvs) == 0 {
-		return nil, fmt.Errorf("asg not found: %s", id)
+		return nil, fmt.Errorf("asg not found at path: %s", asgDefPath)
 	}
 	var a models.Assignment
 	if err := json.Unmarshal(resp.Kvs[0].Value, &a); err != nil {
@@ -106,12 +110,12 @@ func (s *Store) AssignmentDef(ctx context.Context, id string) (*models.Assignmen
 	return &a, nil
 }
 
-func (s *Store) WatchAssignments(ctx context.Context, nodeID string, rev int64) clientv3.WatchChan {
-	return s.cli.Watch(ctx, config.NodeAssignmentsPath(nodeID), clientv3.WithRev(rev))
+func (s *Store) WatchAssignments(ctx context.Context, nodeAsgPath string, rev int64) clientv3.WatchChan {
+	return s.cli.Watch(ctx, nodeAsgPath, clientv3.WithRev(rev))
 }
 
-func (s *Store) NodeAssignments(ctx context.Context, nodeID string) ([]string, int64, error) {
-	resp, err := s.cli.Get(ctx, config.NodeAssignmentsPath(nodeID))
+func (s *Store) NodeAssignments(ctx context.Context, nodeAsgPath string) ([]string, int64, error) {
+	resp, err := s.cli.Get(ctx, nodeAsgPath)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -126,12 +130,11 @@ func (s *Store) NodeAssignments(ctx context.Context, nodeID string) ([]string, i
 	return ids, rev, nil
 }
 
-func (s *Store) ClaimLeader(ctx context.Context, sess *concurrency.Session, nodeID string) (bool, error) {
-	key := config.ClusterLeaderKey
+func (s *Store) ClaimLeader(ctx context.Context, sess *concurrency.Session, leaderKey, nodeID string) (bool, error) {
 	resp, err := s.cli.Txn(ctx).
-		If(clientv3.Compare(clientv3.CreateRevision(key), "=", 0)).
-		Then(clientv3.OpPut(key, nodeID, clientv3.WithLease(sess.Lease()))).
-		Else(clientv3.OpGet(key)).
+		If(clientv3.Compare(clientv3.CreateRevision(leaderKey), "=", 0)).
+		Then(clientv3.OpPut(leaderKey, nodeID, clientv3.WithLease(sess.Lease()))).
+		Else(clientv3.OpGet(leaderKey)).
 		Commit()
 	if err != nil {
 		return false, fmt.Errorf("leader election txn: %w", err)
@@ -139,8 +142,8 @@ func (s *Store) ClaimLeader(ctx context.Context, sess *concurrency.Session, node
 	return resp.Succeeded, nil
 }
 
-func (s *Store) WatchLeaderKey(ctx context.Context, ch chan<- struct{}) {
-	chWatch := s.cli.Watch(ctx, config.ClusterLeaderKey)
+func (s *Store) WatchLeaderKey(ctx context.Context, leaderKey string, ch chan<- struct{}) {
+	chWatch := s.cli.Watch(ctx, leaderKey)
 	for {
 		select {
 		case <-ctx.Done():
@@ -162,22 +165,22 @@ func (s *Store) WatchLeaderKey(ctx context.Context, ch chan<- struct{}) {
 	}
 }
 
-func (s *Store) GetActiveNodeIDs(ctx context.Context) ([]string, error) {
-	resp, err := s.cli.Get(ctx, config.PrefixHeartbeats, clientv3.WithPrefix())
+func (s *Store) GetActiveNodeIDs(ctx context.Context, prefix string) ([]string, error) {
+	resp, err := s.cli.Get(ctx, prefix, clientv3.WithPrefix())
 	if err != nil {
 		return nil, err
 	}
 	var ids []string
 	for _, kv := range resp.Kvs {
-		if id := string(kv.Key[len(config.PrefixHeartbeats):]); id != "" {
+		if id := string(kv.Key[len(prefix):]); id != "" {
 			ids = append(ids, id)
 		}
 	}
 	return ids, nil
 }
 
-func (s *Store) GetAllAssignments(ctx context.Context) ([]models.Assignment, error) {
-	resp, err := s.cli.Get(ctx, config.PrefixDefs, clientv3.WithPrefix())
+func (s *Store) GetAllAssignments(ctx context.Context, prefix string) ([]models.Assignment, error) {
+	resp, err := s.cli.Get(ctx, prefix, clientv3.WithPrefix())
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +227,3 @@ func (s *Store) GetClusterMembers(ctx context.Context) ([]models.MemberInfo, err
 	}
 	return res, nil
 }
-
-/*
-
- */
