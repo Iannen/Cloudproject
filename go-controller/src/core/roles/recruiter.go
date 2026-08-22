@@ -10,11 +10,6 @@ import (
 	"time"
 )
 
-type TSClient interface {
-	GetPeers(ctx context.Context) ([]*models.TSPeer, error)
-	GetLocalIP(ctx context.Context) (string, error)
-}
-
 type Recruiter struct {
 	str  ClusterMgr
 	ts   TSClient
@@ -142,4 +137,9 @@ type ClusterMgr interface {
 	AddLearner(ctx context.Context, peerURL string) (*models.MemberInfo, []models.MemberInfo, error)
 	PromoteMember(ctx context.Context, memberID uint64) error
 	RemoveMember(ctx context.Context, memberID uint64) error
+}
+
+type TSClient interface {
+	GetPeers(ctx context.Context) ([]*models.TSPeer, error)
+	GetLocalIP(ctx context.Context) (string, error)
 }

@@ -17,27 +17,26 @@ func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment) {
 	tk := time.NewTicker(config.ReconcileInterval)
 	defer tk.Stop()
 
-	log.Printf("[Leader] Active on %s (%s)", a.NodeID, a.ID)
+	log.Printf("[Leader] Started: %s on %s", a.ID, a.NodeID)
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("[Leader] Context canceled, stopping leader role (%s): %v", a.ID, ctx.Err())
 			return
 		case <-tk.C:
-			log.Printf("[Leader] Ticker event received, running reconcile..")
-			l.reconcile(ctx, l.store)
+			if err := l.reconcile(ctx); err != nil {
+				log.Println(err)
+			}
 		}
 	}
 }
 
-func (l *LeaderRole) reconcile(ctx context.Context, str AssignmentStore) {
-	nodes, err := str.GetActiveNodeIDs(ctx, config.PrefixHeartbeats)
+func (l *LeaderRole) reconcile(ctx context.Context) error {
+	nodes, err := l.store.GetActiveNodeIDs(ctx, config.PrefixHeartbeats)
 	if err != nil {
-		log.Printf("[Leader] Failed to fetch active nodes from etcd: %v", err)
-		return
+		return fmt.Errorf("[Leader] active node lookup failed: %w", err)
 	}
 	if len(nodes) == 0 {
-		return
+		return nil
 	}
 
 	active := make(map[string]bool, len(nodes))
@@ -45,10 +44,9 @@ func (l *LeaderRole) reconcile(ctx context.Context, str AssignmentStore) {
 		active[n] = true
 	}
 
-	asgs, err := str.GetAllAssignments(ctx, config.PrefixDefs)
+	asgs, err := l.store.GetAllAssignments(ctx, config.PrefixDefs)
 	if err != nil {
-		log.Printf("[Leader] Failed to fetch existing assignments from etcd: %v", err)
-		return
+		return fmt.Errorf("[Leader] assignment lookup failed: %w", err)
 	}
 
 	byRole := make(map[string][]models.Assignment)
@@ -68,13 +66,15 @@ func (l *LeaderRole) reconcile(ctx context.Context, str AssignmentStore) {
 			}
 			id := fmt.Sprintf("%s-%s-%d", spec.Name, node, time.Now().UnixNano()%10000)
 
-			if err := str.CreateAssignment(ctx, config.AsgDefPath(id), config.NodeAssignmentsPath(node), models.Assignment{ID: id, NodeID: node, Role: spec.Name}); err != nil {
+			if err := l.store.CreateAssignment(ctx, config.AsgDefPath(id), config.NodeAssignmentsPath(node), models.Assignment{ID: id, NodeID: node, Role: spec.Name}); err != nil {
 				log.Printf("[Leader] assign failed role=%s node=%s: %v", spec.Name, node, err)
 			} else {
 				log.Printf("[Leader] assigned id=%s node=%s", id, node)
 			}
 		}
 	}
+
+	return nil
 }
 
 type AssignmentStore interface {
@@ -100,6 +100,7 @@ func (l *LeaderRole) pickNode(nodes []string, existing []models.Assignment) stri
 	}
 	return best
 }
+
 func NewLeaderRole(store AssignmentStore) *LeaderRole {
 	return &LeaderRole{
 		store: store,

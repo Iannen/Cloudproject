@@ -9,6 +9,9 @@ I. Long term goals
 
 II. Medium term goals
 
+[ ] Abstract repetitive ticker/ctx loop from LeaderRole.Run and Recruiter.Run into a shared reconciler runner helper.
+
+    [ ] Align LeaderRole and its internal helpers to match Recruiter logging patterns and error handling return types.
 
 III. Immediate Goals
 
