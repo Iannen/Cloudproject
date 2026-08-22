@@ -20,19 +20,9 @@ kb_def:
       secondary: ASDF
 
 domains:
-- name: bootstrap
+- name: c-core
   resolvers:
-  - {id: domain_fragments, type: multi-document-retrieval, files: [
-        bootstrap.md, bootstrap-backlog.md]}
-  renders:
-  - name: bootstrap
-    resolvers:
-    - {id: prompt_fragments, type: multi-document-retrieval, files: []}
-    - {id: repo_content, type: repo_content, includes: [bootstrap], sorting: normal}
-
-- name: controller
-  resolvers:
-  - {id: repo_content, type: repo_content, includes: [go-controller/src], sorting: normal} 
+  - {id: repo_content, type: repo_content, includes: [go-controller/src], excludes: [go-controller/src/infra], sorting: normal} 
   - {id: domain_fragments, type: multi-document-retrieval, files: [controller.md]}
   renders:
   - name: plan
@@ -45,7 +35,22 @@ domains:
     resolvers:
     - {id: prompt_fragments, type: multi-document-retrieval, files: [controller-backlog.md, doc-mgmnt.md, {"file": "project-history.md", "tail_lines": 8}]}
 
-- name: debloat
+- name: c-infra
+  resolvers:
+  - {id: repo_content, type: repo_content, includes: [go-controller/src], excludes: [go-controller/src/core], sorting: normal} 
+  - {id: domain_fragments, type: multi-document-retrieval, files: [controller.md]}
+  renders:
+  - name: plan
+    resolvers:
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [controller-backlog.md, plan-mode.md]}
+  - name: execute
+    resolvers:
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [controller-backlog.md, do-mode.md]}
+  - name: doc-mgm
+    resolvers:
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [controller-backlog.md, doc-mgmnt.md, {"file": "project-history.md", "tail_lines": 8}]}
+
+- name: c-debloat
   resolvers:
   - {id: repo_content, type: repo_content, includes: [go-controller/src], sorting: normal}
   - {id: domain_fragments, type: multi-document-retrieval, files: [debloat.md]}
@@ -66,6 +71,16 @@ domains:
   - name: error-handling
     resolvers:
     - {id: prompt_fragments, type: multi-document-retrieval, files: [error-streamlining.md]}
+
+- name: bootstrap
+  resolvers:
+  - {id: domain_fragments, type: multi-document-retrieval, files: [
+        bootstrap.md, bootstrap-backlog.md]}
+  renders:
+  - name: bootstrap
+    resolvers:
+    - {id: prompt_fragments, type: multi-document-retrieval, files: []}
+    - {id: repo_content, type: repo_content, includes: [bootstrap], sorting: normal}
 
 - name: pm
   resolvers:
