@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+type TailscaleProvider interface {
+	GetPeers(ctx context.Context) ([]*models.TSPeer, error)
+	GetLocalIP(ctx context.Context) (string, error)
+}
 type TSMgr struct {
 	str  TsManagerStore
 	ts   TailscaleProvider

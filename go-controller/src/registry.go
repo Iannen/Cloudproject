@@ -20,7 +20,8 @@ type Registry struct {
 	mu       sync.Mutex
 	dcr      *adapters.DockerAdapter
 	etcd     *adapters.Store
-	http     *adapters.ListenerAdapter
+	httpSrv  *adapters.HTTPServerAdapter
+	httpCli  *adapters.HTTPClientAdapter
 	osa      *adapters.OsAdapter
 	ts       *adapters.TailscaleAdapter
 	runtimes map[string]*AssignmentRuntime
@@ -30,7 +31,8 @@ func NewRegistry(
 	ctx context.Context,
 	docker *adapters.DockerAdapter,
 	etcd *adapters.Store,
-	http *adapters.ListenerAdapter,
+	httpSrv *adapters.HTTPServerAdapter,
+	httpCli *adapters.HTTPClientAdapter,
 	osa *adapters.OsAdapter,
 	ts *adapters.TailscaleAdapter,
 ) *Registry {
@@ -38,13 +40,13 @@ func NewRegistry(
 		ctx:      ctx,
 		dcr:      docker,
 		etcd:     etcd,
-		http:     http,
+		httpSrv:  httpSrv,
+		httpCli:  httpCli,
 		osa:      osa,
 		ts:       ts,
 		runtimes: make(map[string]*AssignmentRuntime),
 	}
 }
-
 func (r *Registry) InitializeStore() error {
 	return r.etcd.Connect(
 		r.ctx,
@@ -125,7 +127,7 @@ func (r *Registry) ActiveAssignments() map[string]bool {
 func (r *Registry) runner(role string) (RoleRunner, error) {
 	switch role {
 	case "node":
-		return roles.NewNodeRole(r, r.dcr, r.osa, r.http, r.http), nil
+		return roles.NewNodeRole(r, r.dcr, r.osa, r.httpSrv, r.httpCli), nil
 
 	case "member":
 		return roles.NewMemberRole(r.etcd, r), nil
@@ -137,7 +139,7 @@ func (r *Registry) runner(role string) (RoleRunner, error) {
 		return roles.NewTSMgr(
 			r.etcd,
 			r.ts,
-			r.http,
+			r.httpCli,
 		), nil
 
 	default:

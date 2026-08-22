@@ -56,7 +56,7 @@ domains:
 
   - name: decouple
     resolvers:
-    - {id: repo_content, type: repo_content, includes: [go-controller/src], excludes: [go-controller/src/infra/os.go,go-controller/src/infra/tailscale.go, go-controller/src/infra/etcd-store.go], sorting: normal}
+    - {id: repo_content, type: repo_content, includes: [go-controller/src], excludes: [go-controller/src/infra], sorting: normal}
     - {id: prompt_fragments, type: multi-document-retrieval, files: [decouple-strat.md]}
 
   - name: logging

@@ -20,7 +20,8 @@ func main() {
 
 	docker := adapters.NewDockerAdapter()
 	etcd := adapters.NewStore()
-	http := adapters.NewListenerAdapter()
+	httpSrv := adapters.NewHTTPServerAdapter()
+	httpCli := adapters.NewHTTPClientAdapter(config.Timeout)
 	osa := adapters.NewOsAdapter()
 	ts := adapters.NewTailscaleAdapter()
 
@@ -28,7 +29,8 @@ func main() {
 		ctx,
 		docker,
 		etcd,
-		http,
+		httpSrv,
+		httpCli,
 		osa,
 		ts,
 	)
