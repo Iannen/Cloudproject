@@ -2,6 +2,8 @@ package models
 
 import "encoding/json"
 
+// --- Domain Entities ---
+
 type Assignment struct {
 	NodeID string          `json:"node_id"`
 	ID     string          `json:"id"`
@@ -15,12 +17,23 @@ type MemberInfo struct {
 	PeerURLs []string
 }
 
+// --- Cluster Config ---
+
+type RoleSpec struct {
+	Name     string
+	Replicas int
+}
+
+// --- DTOs & RPC ---
+
 type AssimilatePayload struct {
 	LeaderName         string `json:"leader_name"`
 	LeaderPeerURL      string `json:"leader_peer_url"`
 	EtcdInitialCluster string `json:"etcd_initial_cluster"`
 	AssignedIP         string `json:"assigned_ip"`
 }
+
+// --- External Integrations ---
 
 type TSPeer struct {
 	HostName     string   `json:"HostName"`

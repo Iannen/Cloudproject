@@ -1,6 +1,7 @@
 package config
 
 import (
+	"go-controller/src/core/models"
 	"os"
 	"time"
 )
@@ -29,13 +30,7 @@ const (
 	WatchReconnectDelay = 1 * time.Second
 )
 
-// should these be moved to model? they are basically helpers to the clusterspec aspect of the config.i will leave em for now
-type RoleSpec struct {
-	Name     string
-	Replicas int
-}
-
-var ClusterSpec = []RoleSpec{
+var ClusterSpec = []models.RoleSpec{
 	{Name: "tailscale-manager", Replicas: 1},
 }
 

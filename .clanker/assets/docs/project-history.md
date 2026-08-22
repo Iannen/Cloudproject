@@ -39,3 +39,8 @@ X: Deprecated and Removed Legacy Python Controller
 XI: Replaced EtcdSession and SessionWrapper with concurrency.Session
     - Deleted custom SessionWrapper interface and EtcdSession struct wrapper.
     - Standardized store interfaces and role execution signatures across MemberRole, LeaderRole, TSMgr, and AssignmentRuntime to accept *concurrency.Session directly.
+
+XII: Consolidated Data Models and Enforced Package Isolation
+    - Centralized Domain Entities, Cluster Config, DTOs/RPC, and External Integration models into `models/models.go` with standardized comment banners.
+    - Updated `config.go` to consume `models.RoleSpec`.
+    - Preserved unexported scope for runtime types (`event`, `eventType` in `member.go`, `AssignmentRuntime` in `registry.go`).

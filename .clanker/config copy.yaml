@@ -23,32 +23,32 @@ domains:
 - name: c-core
   resolvers:
   - {id: repo_content, type: repo_content, includes: [go-controller/src], excludes: [go-controller/src/adapters], sorting: normal} 
-  - {id: domain_fragments, type: multi-document-retrieval, files: [controller.md, controller-core-backlog.md]}
+  - {id: domain_fragments, type: multi-document-retrieval, files: [controller.md]}
   renders:
   - name: plan
     resolvers:
-    - {id: prompt_fragments, type: multi-document-retrieval, files: [plan-mode.md]}
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [controller-backlog.md, plan-mode.md]}
   - name: execute
     resolvers:
-    - {id: prompt_fragments, type: multi-document-retrieval, files: [do-mode.md]}
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [controller-backlog.md, do-mode.md]}
   - name: doc-mgm
     resolvers:
-    - {id: prompt_fragments, type: multi-document-retrieval, files: [doc-mgmnt.md, {"file": "project-history.md", "tail_lines": 8}]}
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [controller-backlog.md, doc-mgmnt.md, {"file": "project-history.md", "tail_lines": 8}]}
 
 - name: c-adapters
   resolvers:
   - {id: repo_content, type: repo_content, includes: [go-controller/src], excludes: [go-controller/src/core], sorting: normal} 
-  - {id: domain_fragments, type: multi-document-retrieval, files: [controller.md, controller-adapts-backlog.md]}
+  - {id: domain_fragments, type: multi-document-retrieval, files: [controller.md]}
   renders:
   - name: plan
     resolvers:
-    - {id: prompt_fragments, type: multi-document-retrieval, files: [plan-mode.md]}
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [controller-backlog.md, plan-mode.md]}
   - name: execute
     resolvers:
-    - {id: prompt_fragments, type: multi-document-retrieval, files: [do-mode.md]}
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [controller-backlog.md, do-mode.md]}
   - name: doc-mgm
     resolvers:
-    - {id: prompt_fragments, type: multi-document-retrieval, files: [doc-mgmnt.md, {"file": "project-history.md", "tail_lines": 8}]}
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [controller-backlog.md, doc-mgmnt.md, {"file": "project-history.md", "tail_lines": 8}]}
 
 - name: c-debloat
   resolvers:
