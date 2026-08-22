@@ -9,5 +9,6 @@ type RoleMgr interface {
 	Stop(assignmentID string)
 	StopAll()
 	ActiveAssignments() map[string]bool
+	IsActive(assignmentID string) bool
 	InitializeStore() error
 }

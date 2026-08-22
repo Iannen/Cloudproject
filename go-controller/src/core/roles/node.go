@@ -47,7 +47,7 @@ func (n *NodeRole) handleInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := config.NodeID()
-	if running, err := n.dcr.IsEtcdRunning(r.Context(), config.BootstrapDir); err == nil && running {
+	if n.reg.IsActive("member-" + id) {
 		fmt.Fprintf(w, "Node %s already initialized.\n", id)
 		return
 	}
@@ -148,7 +148,6 @@ type FileMgr interface {
 }
 
 type DockerMgr interface {
-	IsEtcdRunning(ctx context.Context, bootstrapDir string) (bool, error)
 	StartEtcd(ctx context.Context, bootstrapDir string) error
 	ResetEtcd(ctx context.Context, bootstrapDir string) error
 }

@@ -13,14 +13,6 @@ func NewDockerAdapter() *DockerAdapter {
 	return &DockerAdapter{}
 }
 
-func (d *DockerAdapter) IsEtcdRunning(ctx context.Context, bootstrapDir string) (bool, error) {
-	out, err := runCompose(ctx, bootstrapDir, "ps", "-q", "etcd")
-	if err != nil {
-		return false, err
-	}
-	return len(strings.TrimSpace(string(out))) > 0, nil
-}
-
 func (d *DockerAdapter) StartEtcd(ctx context.Context, bootstrapDir string) error {
 	_, err := runCompose(ctx, bootstrapDir, "up", "-d", "etcd")
 	return err

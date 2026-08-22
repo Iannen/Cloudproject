@@ -124,6 +124,13 @@ func (r *Registry) ActiveAssignments() map[string]bool {
 	return active
 }
 
+func (r *Registry) IsActive(assignmentID string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	_, exists := r.runtimes[assignmentID]
+	return exists
+}
+
 func (r *Registry) runner(role string) (RoleRunner, error) {
 	switch role {
 	case "node":
