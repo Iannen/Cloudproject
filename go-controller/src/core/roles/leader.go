@@ -10,7 +10,7 @@ import (
 )
 
 type LeaderRole struct {
-	store LeaderStore
+	store AssignmentStore
 }
 
 func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment) error {
@@ -30,7 +30,7 @@ func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment) error {
 	}
 }
 
-func (l *LeaderRole) reconcile(ctx context.Context, str LeaderStore) {
+func (l *LeaderRole) reconcile(ctx context.Context, str AssignmentStore) {
 	nodes, err := str.GetActiveNodeIDs(ctx, config.PrefixHeartbeats)
 	if err != nil {
 		log.Printf("[Leader] Failed to fetch active nodes from etcd: %v", err)
@@ -77,7 +77,7 @@ func (l *LeaderRole) reconcile(ctx context.Context, str LeaderStore) {
 	}
 }
 
-type LeaderStore interface {
+type AssignmentStore interface {
 	GetActiveNodeIDs(ctx context.Context, prefix string) ([]string, error)
 	GetAllAssignments(ctx context.Context, prefix string) ([]models.Assignment, error)
 	CreateAssignment(ctx context.Context, asgDefPath, nodeAsgPath string, a models.Assignment) error
@@ -100,7 +100,7 @@ func (l *LeaderRole) pickNode(nodes []string, existing []models.Assignment) stri
 	}
 	return best
 }
-func NewLeaderRole(store LeaderStore) *LeaderRole {
+func NewLeaderRole(store AssignmentStore) *LeaderRole {
 	return &LeaderRole{
 		store: store,
 	}

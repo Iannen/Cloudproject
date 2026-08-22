@@ -15,8 +15,8 @@ import (
 )
 
 type MemberRole struct {
-	store    MemberStore
-	registry RegistryInterface
+	store    ParticipantStore
+	registry RoleMgr
 }
 
 func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) error {
@@ -251,7 +251,7 @@ func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, c
 	}
 }
 
-type MemberStore interface {
+type ParticipantStore interface {
 	NodeAssignments(ctx context.Context, nodeAsgPath string) ([]string, int64, error)
 	WatchAssignments(ctx context.Context, nodeAsgPath string, rev int64) clientv3.WatchChan
 	AssignmentDef(ctx context.Context, asgDefPath string) (*models.Assignment, error)
@@ -282,7 +282,7 @@ type event struct {
 	hasIDs bool
 }
 
-func NewMemberRole(store MemberStore, registry RegistryInterface) *MemberRole {
+func NewMemberRole(store ParticipantStore, registry RoleMgr) *MemberRole {
 	return &MemberRole{
 		store:    store,
 		registry: registry,

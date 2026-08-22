@@ -12,11 +12,11 @@ import (
 )
 
 type NodeRole struct {
-	dcr DockerCreature
-	osa OsCreature
-	cms ListenerCreature
-	spk SpeakerCreature
-	reg RegistryInterface
+	dcr DockerMgr
+	osa FileMgr
+	cms HTTPServer
+	spk HealthChecker
+	reg RoleMgr
 }
 
 func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) error {
@@ -135,25 +135,25 @@ func (n *NodeRole) InitializeStore() error {
 	return n.reg.InitializeStore()
 }
 
-type ListenerCreature interface {
+type HTTPServer interface {
 	RegisterHandler(pattern string, handler http.HandlerFunc)
 	Start(addr string, clientTimeout time.Duration)
 	Shutdown(ctx context.Context) error
 }
-type SpeakerCreature interface {
+type HealthChecker interface {
 	WaitEndpointReady(ctx context.Context, endpoint string, retries int, interval time.Duration) error
 }
-type OsCreature interface {
+type FileMgr interface {
 	WriteEnvConfig(ctx context.Context, nodeID string, bootstrapDir string, payload models.AssimilatePayload) error
 }
 
-type DockerCreature interface {
+type DockerMgr interface {
 	IsEtcdRunning(ctx context.Context, bootstrapDir string) (bool, error)
 	StartEtcd(ctx context.Context, bootstrapDir string) error
 	ResetEtcd(ctx context.Context, bootstrapDir string) error
 }
 
-func NewNodeRole(reg RegistryInterface, dcr DockerCreature, osa OsCreature, cms ListenerCreature, spk SpeakerCreature) *NodeRole {
+func NewNodeRole(reg RoleMgr, dcr DockerMgr, osa FileMgr, cms HTTPServer, spk HealthChecker) *NodeRole {
 	n := &NodeRole{reg: reg, dcr: dcr, osa: osa, cms: cms, spk: spk}
 	n.cms.RegisterHandler("/initialize", n.handleInit)
 	n.cms.RegisterHandler("/assimilate", n.handleAssimilate)

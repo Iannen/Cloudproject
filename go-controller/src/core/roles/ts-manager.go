@@ -10,14 +10,14 @@ import (
 	"time"
 )
 
-type TailscaleProvider interface {
+type TailscaleMgr interface {
 	GetPeers(ctx context.Context) ([]*models.TSPeer, error)
 	GetLocalIP(ctx context.Context) (string, error)
 }
 type TSMgr struct {
-	str  TsManagerStore
-	ts   TailscaleProvider
-	http NodeClient
+	str  ClusterMgr
+	ts   TailscaleMgr
+	http RpcClient
 }
 
 func (t *TSMgr) Run(ctx context.Context, a *models.Assignment) error {
@@ -129,7 +129,7 @@ func (t *TSMgr) assimilate(ctx context.Context, p *models.TSPeer) {
 	log.Printf("[TSMgr] assimilated and activated host=%s ip=%s", p.HostName, ip)
 }
 
-func NewTSMgr(str TsManagerStore, ts TailscaleProvider, http NodeClient) *TSMgr {
+func NewTSMgr(str ClusterMgr, ts TailscaleMgr, http RpcClient) *TSMgr {
 	return &TSMgr{
 		str:  str,
 		ts:   ts,
@@ -137,12 +137,12 @@ func NewTSMgr(str TsManagerStore, ts TailscaleProvider, http NodeClient) *TSMgr 
 	}
 }
 
-type NodeClient interface {
+type RpcClient interface {
 	Assimilate(ctx context.Context, targetIP string, payload models.AssimilatePayload) error
 	Activate(ctx context.Context, targetIP string) error
 }
 
-type TsManagerStore interface {
+type ClusterMgr interface {
 	GetClusterMembers(ctx context.Context) ([]models.MemberInfo, error)
 	AddLearner(ctx context.Context, peerURL string) (*models.MemberInfo, []models.MemberInfo, error)
 	PromoteMember(ctx context.Context, memberID uint64) error

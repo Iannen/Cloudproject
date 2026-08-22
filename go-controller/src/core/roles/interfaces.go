@@ -4,7 +4,7 @@ import (
 	"go-controller/src/core/models"
 )
 
-type RegistryInterface interface {
+type RoleMgr interface {
 	Start(a *models.Assignment) error
 	Stop(assignmentID string)
 	StopAll()
