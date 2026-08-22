@@ -26,95 +26,105 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 	for {
 		select {
 		case <-ctx.Done():
+			m.registry.StopAll()
 			return
 		default:
 		}
 
 		sess, err := m.store.NewSession(ctx, config.SessionTTL)
 		if err != nil {
-			log.Printf("[Member] Failed to establish fresh session: %v. Retrying...", err)
+			log.Printf("[Member] Failed to establish fresh session: %v. Retrying in 2 seconds...", err)
 			select {
 			case <-ctx.Done():
 				return
 			case <-time.After(config.RetryInterval):
-				continue
 			}
+			continue
 		}
 
 		sCtx, cancel := context.WithCancel(ctx)
-		if err := m.runSession(sCtx, sess, nodeID); err != nil {
-			log.Printf("[Member] Session ended: %v", err)
+		hbKey := config.NodeHeartbeatPath(nodeID)
+		if err := m.store.PutWithSession(sCtx, sess, hbKey, "alive"); err != nil {
+			log.Printf("[Member] Failed to register node heartbeat: %v. Resetting session...", err)
+			cancel()
+			_ = sess.Close()
+			continue
+		}
+
+		isLeader, err := m.store.ClaimLeader(sCtx, sess, config.ClusterLeaderKey, nodeID)
+		if err != nil {
+			log.Printf("[Member] Leader check failed: %v", err)
+		}
+
+		if isLeader {
+			log.Println("[Member] This node won leadership! Launching Leader Role...")
+			leaderAsg := &models.Assignment{
+				NodeID: nodeID,
+				ID:     "leader-" + nodeID,
+				Role:   "leader",
+			}
+			if err := m.registry.Start(leaderAsg); err != nil {
+				log.Printf("[Member] Failed to start leader role: %v", err)
+			}
+		}
+
+		initIDs, rev, err := m.store.NodeAssignments(sCtx, config.NodeAssignmentsPath(nodeID))
+		if err != nil {
+			log.Printf("[Member] Error fetching initial bootstrap assignments: %v. Resetting session...", err)
+			cancel()
+			_ = sess.Close()
+			continue
+		}
+
+		m.reconcile(sCtx, initIDs)
+
+		ch := make(chan event, 10)
+		m.startLeaderWatcher(sCtx, ch)
+		m.startWatch(sCtx, nodeID, rev, ch)
+		m.startTicker(sCtx, ch)
+
+		alive := true
+		for alive {
+			select {
+			case <-ctx.Done():
+				cancel()
+				m.registry.StopAll()
+				_ = sess.Close()
+				return
+
+			case <-sess.Done():
+				log.Println("[Member] CRITICAL: Session lease lost! Evicting child roles...")
+				cancel()
+				m.registry.StopAll()
+				alive = false
+
+			case e := <-ch:
+				var targets []string
+				if e.kind == evtWatch && e.hasIDs {
+					targets = e.ids
+				} else {
+					ids, _, err := m.store.NodeAssignments(sCtx, config.NodeAssignmentsPath(nodeID))
+					if err != nil {
+						log.Printf("[Member] Error updating assignment state from ticker: %v", err)
+						continue
+					}
+					targets = ids
+				}
+
+				m.reconcile(sCtx, targets)
+			}
 		}
 
 		cancel()
 		_ = sess.Close()
-		m.stopManagedAssignments() // Only needed here after an active session drops
 	}
 }
 
-func (m *MemberRole) runSession(sCtx context.Context, sess *concurrency.Session, nodeID string) error {
-	hbKey := config.NodeHeartbeatPath(nodeID)
-	if err := m.store.PutWithSession(sCtx, sess, hbKey, "alive"); err != nil {
-		return err
-	}
-
-	if isLeader, err := m.store.ClaimLeader(sCtx, sess, config.ClusterLeaderKey, nodeID); err == nil && isLeader {
-		log.Println("[Member] Won leadership! Launching Leader Role...")
-		_ = m.registry.Start(&models.Assignment{
-			NodeID: nodeID,
-			ID:     "leader-" + nodeID,
-			Role:   "leader",
-		})
-	}
-
-	initIDs, rev, err := m.store.NodeAssignments(sCtx, config.NodeAssignmentsPath(nodeID))
-	if err != nil {
-		return err
-	}
-
-	m.reconcile(sCtx, initIDs)
-
-	ch := make(chan event, 10)
-	m.startLeaderWatcher(sCtx, ch)
-	m.startWatch(sCtx, nodeID, rev, ch)
-	m.startTicker(sCtx, ch)
-
-	for {
-		select {
-		case <-sCtx.Done():
-			return sCtx.Err()
-
-		case <-sess.Done():
-			return errors.New("session lease expired")
-
-		case e := <-ch:
-			var targets []string
-			if e.kind == evtWatch && e.hasIDs {
-				targets = e.ids
-			} else {
-				ids, _, err := m.store.NodeAssignments(sCtx, config.NodeAssignmentsPath(nodeID))
-				if err != nil {
-					log.Printf("[Member] Error updating assignment state: %v", err)
-					continue
-				}
-				targets = ids
-			}
-			m.reconcile(sCtx, targets)
-		}
-	}
-}
-
-func (m *MemberRole) stopManagedAssignments() {
-	active := m.registry.ActiveAssignments()
-	for id := range active {
-		if strings.HasPrefix(id, "node-") || strings.HasPrefix(id, "member-") {
-			continue
-		}
-		m.registry.Stop(id)
-	}
-}
-
-func (m *MemberRole) reconcile(ctx context.Context, ids []string) {
+func (m *MemberRole) reconcile(
+	ctx context.Context,
+	ids []string,
+) {
+	log.Printf("[Member] enter reconcile")
 	want := make(map[string]bool, len(ids))
 	for _, id := range ids {
 		want[id] = true
@@ -125,6 +135,7 @@ func (m *MemberRole) reconcile(ctx context.Context, ids []string) {
 		if strings.HasPrefix(id, "leader-") || strings.HasPrefix(id, "member-") || strings.HasPrefix(id, "node-") {
 			continue
 		}
+
 		if !want[id] {
 			m.registry.Stop(id)
 		}
@@ -137,8 +148,10 @@ func (m *MemberRole) reconcile(ctx context.Context, ids []string) {
 				log.Printf("[Member] fetch assignment def failed id=%s: %v", id, err)
 				continue
 			}
+
 			if err := m.registry.Start(asg); err != nil {
 				log.Printf("[Member] start assignment failed id=%s role=%s: %v", id, asg.Role, err)
+				continue
 			}
 		}
 	}
@@ -186,6 +199,7 @@ func (m *MemberRole) startWatch(ctx context.Context, nodeID string, rev int64, c
 			if !m.watchLoop(ctx, nodeID, &rev, ch) {
 				return
 			}
+
 			t := time.NewTimer(config.WatchReconnectDelay)
 			select {
 			case <-ctx.Done():
@@ -196,7 +210,6 @@ func (m *MemberRole) startWatch(ctx context.Context, nodeID string, rev int64, c
 		}
 	}()
 }
-
 func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, ch chan<- event) bool {
 	wCh := m.store.WatchAssignments(ctx, config.NodeAssignmentsPath(nodeID), *rev+1)
 
@@ -208,9 +221,14 @@ func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, c
 			if !ok {
 				return true
 			}
+
 			if resp.Canceled {
+				if !errors.Is(resp.Err(), context.Canceled) {
+					log.Printf("[Member] watch canceled revision=%d: %v", *rev, resp.Err())
+				}
 				return !errors.Is(resp.Err(), context.Canceled)
 			}
+
 			if resp.Header.Revision > *rev {
 				*rev = resp.Header.Revision
 			}
@@ -219,9 +237,11 @@ func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, c
 				var ids []string
 				if ev.Type != clientv3.EventTypeDelete {
 					if err := json.Unmarshal(ev.Kv.Value, &ids); err != nil {
+						log.Printf("[Member] Error unmarshaling watched assignments: %v", err)
 						continue
 					}
 				}
+
 				select {
 				case ch <- event{kind: evtWatch, ids: ids, hasIDs: true}:
 				default:
