@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
+	"go-controller/src/adapters"
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
-	adapters "go-controller/src/infra"
 	"log"
 	"os"
 	"os/signal"
