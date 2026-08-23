@@ -1,9 +1,8 @@
-package main
+package registry
 
 import (
 	"context"
 	"fmt"
-	"go-controller/src/adapters"
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"go-controller/src/core/roles"
@@ -15,37 +14,41 @@ type RoleRunner interface {
 }
 
 type Registry struct {
-	ctx      context.Context
-	mu       sync.Mutex
-	dcr      *adapters.DockerAdapter
-	etcd     *adapters.Store
-	httpSrv  *adapters.HTTPServerAdapter
-	httpCli  *adapters.HTTPClientAdapter
-	osa      *adapters.OsAdapter
-	ts       *adapters.TailscaleAdapter
-	runtimes map[string]*AssignmentRuntime
+	ctx           context.Context
+	mu            sync.Mutex
+	dcr           roles.DockerMgr
+	etcd          roles.StoreAdapter
+	httpSrv       roles.HTTPServer
+	healthChecker roles.HealthChecker
+	rpcClient     roles.RpcClient
+	osa           roles.FileMgr
+	ts            roles.TSClient
+	runtimes      map[string]*AssignmentRuntime
 }
 
 func NewRegistry(
 	ctx context.Context,
-	docker *adapters.DockerAdapter,
-	etcd *adapters.Store,
-	httpSrv *adapters.HTTPServerAdapter,
-	httpCli *adapters.HTTPClientAdapter,
-	osa *adapters.OsAdapter,
-	ts *adapters.TailscaleAdapter,
+	docker roles.DockerMgr,
+	etcd roles.StoreAdapter,
+	httpSrv roles.HTTPServer,
+	healthChecker roles.HealthChecker,
+	rpcClient roles.RpcClient,
+	osa roles.FileMgr,
+	ts roles.TSClient,
 ) *Registry {
 	return &Registry{
-		ctx:      ctx,
-		dcr:      docker,
-		etcd:     etcd,
-		httpSrv:  httpSrv,
-		httpCli:  httpCli,
-		osa:      osa,
-		ts:       ts,
-		runtimes: make(map[string]*AssignmentRuntime),
+		ctx:           ctx,
+		dcr:           docker,
+		etcd:          etcd,
+		httpSrv:       httpSrv,
+		healthChecker: healthChecker,
+		rpcClient:     rpcClient,
+		osa:           osa,
+		ts:            ts,
+		runtimes:      make(map[string]*AssignmentRuntime),
 	}
 }
+
 func (r *Registry) InitializeStore() error {
 	return r.etcd.Connect(
 		r.ctx,
@@ -133,7 +136,7 @@ func (r *Registry) IsActive(assignmentID string) bool {
 func (r *Registry) runner(role string) (RoleRunner, error) {
 	switch role {
 	case "node":
-		return roles.NewNodeRole(r, r.dcr, r.osa, r.httpSrv, r.httpCli), nil
+		return roles.NewNodeRole(r, r.dcr, r.osa, r.httpSrv, r.healthChecker), nil
 
 	case "member":
 		return roles.NewMemberRole(r.etcd, r), nil
@@ -145,7 +148,7 @@ func (r *Registry) runner(role string) (RoleRunner, error) {
 		return roles.NewRecruiter(
 			r.etcd,
 			r.ts,
-			r.httpCli,
+			r.rpcClient,
 		), nil
 
 	default:

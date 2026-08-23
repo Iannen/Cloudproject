@@ -64,3 +64,9 @@ XVI: NodeRole HTTP Transport Boundary Refactoring
     - Abstracted HTTP server behind `HTTPServer` interface and `DomainHandler` func types in `core/roles/node.go`.
     - Removed `net/http` dependencies, status codes, and HTTP-specific error writing logic from `NodeRole`.
     - Routing and response handling now execute via domain handlers (`/initialize`, `/assimilate`, `/activate`).
+
+XVII: Registry Domain Elevation and Interface Decoupling
+    - Relocated `registry.go` to `go-controller/src/core/registry/registry.go`.
+    - Fully decoupled `Registry` from concrete adapter packages by depending solely on domain interfaces in `core/roles`.
+    - Introduced composite `StoreAdapter` interface in `core/roles/interfaces.go` combining `AssignmentStore`, `ParticipantStore`, `ClusterMgr`, and store lifecycle `Connect`.
+    - Updated `main.go` to wire concrete adapters into `registry.NewRegistry`, explicitly passing HTTP client capabilities as distinct `HealthChecker` and `RpcClient` parameters.

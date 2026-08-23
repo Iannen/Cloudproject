@@ -5,6 +5,7 @@ import (
 	"go-controller/src/adapters"
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
+	"go-controller/src/core/registry"
 	"log"
 	"os"
 	"os/signal"
@@ -13,7 +14,7 @@ import (
 
 func main() {
 	nodeID := config.NodeID()
-	log.Printf("[Main] Starting controller node with ID: %s", nodeID)
+	log.Printf("[Main] Starting node with ID: %s", nodeID)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -25,11 +26,12 @@ func main() {
 	osa := adapters.NewOsAdapter()
 	ts := adapters.NewTailscaleAdapter()
 
-	reg := NewRegistry(
+	reg := registry.NewRegistry(
 		ctx,
 		docker,
 		etcd,
 		httpSrv,
+		httpCli,
 		httpCli,
 		osa,
 		ts,
