@@ -15,7 +15,7 @@ III. Immediate Goals (consider these first)
         [ ] Pass `leaderKey`, `reconcileInterval`, and `reconnectDelay` as parameters to `SubscribeEvents` (or via `Store` constructor) and forward them to watcher goroutines.
     [ ] `go-controller/src/adapters/http-client.go`
         [ ] Parameterize target base URL / port (`8080`) and path endpoints for `Assimilate` and `Activate`.
-    [ ] `go-controller/src/adapters/docker.go`
+    [x] `go-controller/src/adapters/docker.go`
         [ ] Move executable name (`docker`) and subcommand flags (`compose`, `up`, `down`, etc.) to configurable struct fields or method options.
     [x] `go-controller/src/adapters/os.go`
         [ ] Parameterize env file path (`.env`), file permissions (`0644`), and template format string in `WriteEnvConfig`.

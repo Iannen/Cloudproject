@@ -45,6 +45,16 @@ const (
 	EnvTemplate = "HOSTNAME=%s\nTAILSCALE_IP=%s\nETCD_NAME=%s\nETCD_INITIAL_CLUSTER=%s\nETCD_INITIAL_CLUSTER_STATE=existing\n"
 )
 
+const (
+	DockerBinary = "docker"
+)
+
+var (
+	DockerComposeCmd = []string{"compose"}
+	DockerUpArgs     = []string{"up", "-d", "etcd"}
+	DockerDownArgs   = []string{"down", "etcd", "--volumes", "--remove-orphans"}
+)
+
 func NodeID() string { return os.Getenv("NODE_ID") }
 
 func NodeHeartbeatPath(id string) string { return PrefixHeartbeats + id }

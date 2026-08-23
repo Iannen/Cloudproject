@@ -15,12 +15,17 @@ import (
 func main() {
 	nodeID := config.NodeID()
 	log.Printf("[Main] Starting node with ID: %s", nodeID)
-	log.Println("os adapter fixd")
+	//log.Println("os adapter fixd")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	docker := adapters.NewDockerAdapter()
+	docker := adapters.NewDockerAdapter(
+		config.DockerBinary,
+		config.DockerComposeCmd,
+		config.DockerUpArgs,
+		config.DockerDownArgs,
+	)
 	etcd := adapters.NewStore()
 	httpSrv := adapters.NewHTTPServerAdapter()
 	httpCli := adapters.NewHTTPClientAdapter(config.Timeout)
