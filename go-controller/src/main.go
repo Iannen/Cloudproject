@@ -24,7 +24,7 @@ func main() {
 	httpSrv := adapters.NewHTTPServerAdapter()
 	httpCli := adapters.NewHTTPClientAdapter(config.Timeout)
 	osa := adapters.NewOsAdapter()
-	ts := adapters.NewTailscaleAdapter()
+	ts := adapters.NewTailscaleAdapter(config.TailscaleBinary, config.TailscaleIPEnv)
 
 	reg := registry.NewRegistry(
 		ctx,

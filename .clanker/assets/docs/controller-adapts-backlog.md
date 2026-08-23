@@ -17,7 +17,7 @@ II. Medium term goals (investigatory)
         [ ] Move executable name (`docker`) and subcommand flags (`compose`, `up`, `down`, etc.) to configurable struct fields or method options.
     [ ] `go-controller/src/adapters/os.go`
         [ ] Parameterize env file path (`.env`), file permissions (`0644`), and template format string in `WriteEnvConfig`.
-    [ ] `go-controller/src/adapters/tailscale.go`
+    [x] `go-controller/src/adapters/tailscale.go`
         [ ] Parameterize executable name (`tailscale`) and env var key (`TAILSCALE_IP`).
         
 

@@ -10,14 +10,26 @@ import (
 	"strings"
 )
 
-type TailscaleAdapter struct{}
+type TailscaleAdapter struct {
+	binaryPath string
+	envKey     string
+}
 
-func NewTailscaleAdapter() *TailscaleAdapter {
-	return &TailscaleAdapter{}
+func NewTailscaleAdapter(binaryPath, envKey string) *TailscaleAdapter {
+	if binaryPath == "" {
+		binaryPath = "tailscale"
+	}
+	if envKey == "" {
+		envKey = "TAILSCALE_IP"
+	}
+	return &TailscaleAdapter{
+		binaryPath: binaryPath,
+		envKey:     envKey,
+	}
 }
 
 func (t *TailscaleAdapter) GetPeers(ctx context.Context) ([]*models.TSPeer, error) {
-	out, err := exec.CommandContext(ctx, "tailscale", "status", "--json").Output()
+	out, err := exec.CommandContext(ctx, t.binaryPath, "status", "--json").Output()
 	if err != nil {
 		return nil, fmt.Errorf("tailscale status: %w", err)
 	}
@@ -38,10 +50,10 @@ func (t *TailscaleAdapter) GetPeers(ctx context.Context) ([]*models.TSPeer, erro
 }
 
 func (t *TailscaleAdapter) GetLocalIP(ctx context.Context) (string, error) {
-	if ip := os.Getenv("TAILSCALE_IP"); ip != "" {
+	if ip := os.Getenv(t.envKey); ip != "" {
 		return ip, nil
 	}
-	out, err := exec.CommandContext(ctx, "tailscale", "ip", "-4").Output()
+	out, err := exec.CommandContext(ctx, t.binaryPath, "ip", "-4").Output()
 	if err != nil {
 		return "", err
 	}

@@ -34,6 +34,11 @@ var ClusterSpec = []models.RoleSpec{
 	{Name: "tailscale-manager", Replicas: 1},
 }
 
+const (
+	TailscaleBinary = "tailscale"
+	TailscaleIPEnv  = "TAILSCALE_IP"
+)
+
 func NodeID() string { return os.Getenv("NODE_ID") }
 
 func NodeHeartbeatPath(id string) string { return PrefixHeartbeats + id }
