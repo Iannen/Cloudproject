@@ -4,9 +4,11 @@ II. Medium term goals (investigatory)
 
 [ ] the only domain import allowed is models. Other imports from domain are forbidden (such as config)
     [ ] Refactor `etcd-store.go` to remove imports of `core/config` by passing required paths and configuration values as parameters
-    [x] Refactor `http-server.go` to remove import of `core/roles` by moving `DomainHandler` type definition to `models` package
+    [x] Refactor `http-server.go` to remove import of `core/roles` by moving `DomainHandler` type definition to `models` package      
 
-[ ] Adapters should not contain hardcoded values, nor should they access core/config directly. 
+III. Immediate Goals (consider these first)
+
+[ ] Adapters should not contain hardcoded values, nor should they access core/config directly.
     The values should be passed in the method, or supplied in the constructor.
     [ ] `go-controller/src/adapters/etcd-store.go`
         [ ] Remove import of `core/config`.
@@ -15,13 +17,10 @@ II. Medium term goals (investigatory)
         [ ] Parameterize target base URL / port (`8080`) and path endpoints for `Assimilate` and `Activate`.
     [ ] `go-controller/src/adapters/docker.go`
         [ ] Move executable name (`docker`) and subcommand flags (`compose`, `up`, `down`, etc.) to configurable struct fields or method options.
-    [ ] `go-controller/src/adapters/os.go`
+    [x] `go-controller/src/adapters/os.go`
         [ ] Parameterize env file path (`.env`), file permissions (`0644`), and template format string in `WriteEnvConfig`.
     [x] `go-controller/src/adapters/tailscale.go`
         [ ] Parameterize executable name (`tailscale`) and env var key (`TAILSCALE_IP`).
-        
-
-III. Immediate Goals (consider these first)
 
 IV. Idea bucket:
 

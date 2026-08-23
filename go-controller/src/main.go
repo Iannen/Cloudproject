@@ -15,6 +15,7 @@ import (
 func main() {
 	nodeID := config.NodeID()
 	log.Printf("[Main] Starting node with ID: %s", nodeID)
+	log.Println("os adapter fixd")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -23,7 +24,7 @@ func main() {
 	etcd := adapters.NewStore()
 	httpSrv := adapters.NewHTTPServerAdapter()
 	httpCli := adapters.NewHTTPClientAdapter(config.Timeout)
-	osa := adapters.NewOsAdapter()
+	osa := adapters.NewOsAdapter(config.EnvFileName, config.EnvFilePerm, config.EnvTemplate)
 	ts := adapters.NewTailscaleAdapter(config.TailscaleBinary, config.TailscaleIPEnv)
 
 	reg := registry.NewRegistry(

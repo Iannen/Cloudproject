@@ -39,6 +39,12 @@ const (
 	TailscaleIPEnv  = "TAILSCALE_IP"
 )
 
+const (
+	EnvFileName = ".env"
+	EnvFilePerm = 0644
+	EnvTemplate = "HOSTNAME=%s\nTAILSCALE_IP=%s\nETCD_NAME=%s\nETCD_INITIAL_CLUSTER=%s\nETCD_INITIAL_CLUSTER_STATE=existing\n"
+)
+
 func NodeID() string { return os.Getenv("NODE_ID") }
 
 func NodeHeartbeatPath(id string) string { return PrefixHeartbeats + id }
