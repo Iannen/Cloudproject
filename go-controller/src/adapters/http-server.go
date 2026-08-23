@@ -3,7 +3,6 @@ package adapters
 import (
 	"context"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
@@ -51,7 +50,6 @@ func (s *HTTPServerAdapter) handleDomainRequest(w http.ResponseWriter, r *http.R
 
 	resp, err := handler(r.Context(), body)
 	if err != nil {
-		log.Printf("[HTTPServerAdapter] Handler error: %v", err)
 		if r.Context().Err() != nil {
 			http.Error(w, err.Error(), http.StatusRequestTimeout)
 			return
@@ -64,7 +62,8 @@ func (s *HTTPServerAdapter) handleDomainRequest(w http.ResponseWriter, r *http.R
 	_, _ = w.Write([]byte(resp))
 }
 
-func (s *HTTPServerAdapter) Start(addr string, clientTimeout time.Duration) {
+func (s *HTTPServerAdapter) Start(addr string, clientTimeout time.Duration) <-chan error {
+	errCh := make(chan error, 1)
 	s.server = &http.Server{
 		Addr:         addr,
 		Handler:      s.mux,
@@ -73,17 +72,17 @@ func (s *HTTPServerAdapter) Start(addr string, clientTimeout time.Duration) {
 	}
 
 	go func() {
-		log.Printf("[HTTPServerAdapter] Listening on %s", addr)
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("[HTTPServerAdapter] HTTP server error: %v", err)
+			errCh <- err
 		}
 	}()
+
+	return errCh
 }
 
 func (s *HTTPServerAdapter) Shutdown(ctx context.Context) error {
 	if s.server == nil {
 		return nil
 	}
-	log.Println("[HTTPServerAdapter] Shutting down HTTP server...")
 	return s.server.Shutdown(ctx)
 }

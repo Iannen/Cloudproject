@@ -110,7 +110,7 @@ type DomainHandler func(ctx context.Context, body []byte) (string, error)
 type HTTPServer interface {
 	RegisterGetRoute(pattern string, handler DomainHandler)
 	RegisterPostRoute(pattern string, handler DomainHandler)
-	Start(addr string, clientTimeout time.Duration)
+	Start(addr string, clientTimeout time.Duration) <-chan error
 	Shutdown(ctx context.Context) error
 }
 type HealthChecker interface {

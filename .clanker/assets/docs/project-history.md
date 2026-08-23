@@ -70,3 +70,8 @@ XVII: Registry Domain Elevation and Interface Decoupling
     - Fully decoupled `Registry` from concrete adapter packages by depending solely on domain interfaces in `core/roles`.
     - Introduced composite `StoreAdapter` interface in `core/roles/interfaces.go` combining `AssignmentStore`, `ParticipantStore`, `ClusterMgr`, and store lifecycle `Connect`.
     - Updated `main.go` to wire concrete adapters into `registry.NewRegistry`, explicitly passing HTTP client capabilities as distinct `HealthChecker` and `RpcClient` parameters.
+
+XVII: Refactored HTTPServerAdapter to Eliminate Logging and Return Runtime Errors
+    - Removed log package imports from go-controller/src/adapters/http-server.go.
+    - Updated Start signature to return a buffered error channel (<-chan error) for server lifecycle errors.
+    - Stripped startup, shutdown, and internal handler error log statements from HTTPServerAdapter, relying entirely on channel error propagation and HTTP response statuses.
