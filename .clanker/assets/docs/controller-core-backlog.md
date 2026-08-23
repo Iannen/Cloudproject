@@ -4,9 +4,6 @@ I. Long term goals
 
 [ ] Reuse the output instruction in debloat.md
 
-[ ] Clean up member role
-    [ ] ..
-
 II. Medium term goals
 
 [ ] Abstract repetitive ticker/ctx loop from LeaderRole.Run and Recruiter.Run into a shared reconciler runner helper.
@@ -21,9 +18,14 @@ II. Medium term goals
 
 III. Immediate Goals
 
+[ ] Clean up member role
+    [x] Refactor store.NewSession to handle backoffs & retries
+        - Old signature: NewSession(ctx context.Context, ttl int64) (*concurrency.Session, error)
+        - New signature: NewSession(ctx context.Context, ttl int64, retries int, interval time.Duration) (*concurrency.Session, error)
+    [x] Delegate session retry loop in MemberRole to ParticipantStore using new configuration parameters
+    [ ] Investigate moving the session acquistion out of the for loop, considering it a setup phase of the member. 
+
 IV. Idea bucket:
 
 V. Known Bugs:
-
-
 

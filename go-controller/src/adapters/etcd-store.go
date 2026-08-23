@@ -86,8 +86,22 @@ func (s *Store) CreateAssignment(ctx context.Context, asgDefPath, nodeAsgPath st
 	return nil
 }
 
-func (s *Store) NewSession(ctx context.Context, ttl int64) (*concurrency.Session, error) {
-	return concurrency.NewSession(s.cli, concurrency.WithTTL(int(ttl)))
+func (s *Store) NewSession(ctx context.Context, ttl int64, retries int, interval time.Duration) (*concurrency.Session, error) {
+	var err error
+	for i := 0; i < retries; i++ {
+		var sess *concurrency.Session
+		sess, err = concurrency.NewSession(s.cli, concurrency.WithTTL(int(ttl)), concurrency.WithContext(ctx))
+		if err == nil {
+			return sess, nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(interval):
+		}
+	}
+	return nil, err
 }
 
 func (s *Store) PutWithSession(ctx context.Context, sess *concurrency.Session, key, val string) error {

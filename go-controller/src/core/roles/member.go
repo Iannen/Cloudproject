@@ -30,15 +30,10 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 		default:
 		}
 
-		sess, err := m.store.NewSession(ctx, config.SessionTTL)
+		sess, err := m.store.NewSession(ctx, config.SessionTTL, config.StartupRetries, config.RetryInterval)
 		if err != nil {
-			log.Printf("[Member] Failed to establish fresh session: %v. Retrying...", err)
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(config.RetryInterval):
-				continue
-			}
+			log.Printf("[Member] Failed to establish fresh session: %v", err)
+			return
 		}
 
 		sCtx, cancel := context.WithCancel(ctx)
@@ -48,7 +43,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 
 		cancel()
 		_ = sess.Close()
-		m.stopManagedAssignments() // Only needed here after an active session drops
+		m.stopManagedAssignments()
 	}
 }
 
@@ -235,7 +230,7 @@ type ParticipantStore interface {
 	NodeAssignments(ctx context.Context, nodeAsgPath string) ([]string, int64, error)
 	WatchAssignments(ctx context.Context, nodeAsgPath string, rev int64) clientv3.WatchChan
 	AssignmentDef(ctx context.Context, asgDefPath string) (*models.Assignment, error)
-	NewSession(ctx context.Context, ttl int64) (*concurrency.Session, error)
+	NewSession(ctx context.Context, ttl int64, retries int, interval time.Duration) (*concurrency.Session, error)
 	PutWithSession(ctx context.Context, sess *concurrency.Session, key string, value string) error
 	ClaimLeader(ctx context.Context, sess *concurrency.Session, leaderKey, nodeID string) (bool, error)
 	WatchLeaderKey(ctx context.Context, leaderKey string, notifyChan chan<- struct{})
