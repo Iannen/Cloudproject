@@ -15,7 +15,6 @@ import (
 func main() {
 	nodeID := config.NodeID()
 	log.Printf("[Main] Starting node with ID: %s", nodeID)
-	log.Println("http client fix")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -26,7 +25,11 @@ func main() {
 		config.DockerUpArgs,
 		config.DockerDownArgs,
 	)
-	etcd := adapters.NewStore()
+	etcd := adapters.NewStore(
+		config.ClusterLeaderKey,
+		config.ReconcileInterval,
+		config.WatchReconnectDelay,
+	)
 	httpSrv := adapters.NewHTTPServerAdapter()
 	httpCli := adapters.NewHTTPClientAdapter(
 		config.Timeout,

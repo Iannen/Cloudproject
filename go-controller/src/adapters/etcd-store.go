@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"time"
 
@@ -26,11 +25,18 @@ func (e *etcdSession) Close() error {
 }
 
 type Store struct {
-	cli *clientv3.Client
+	cli                 *clientv3.Client
+	leaderKey           string
+	reconcileInterval   time.Duration
+	watchReconnectDelay time.Duration
 }
 
-func NewStore() *Store {
-	return &Store{}
+func NewStore(leaderKey string, reconcileInterval, watchReconnectDelay time.Duration) *Store {
+	return &Store{
+		leaderKey:           leaderKey,
+		reconcileInterval:   reconcileInterval,
+		watchReconnectDelay: watchReconnectDelay,
+	}
 }
 
 func (s *Store) Connect(ctx context.Context, endpoint string, timeout, interval time.Duration, retries int) error {
@@ -174,8 +180,7 @@ func (s *Store) ClaimLeader(ctx context.Context, sess models.Session, leaderKey,
 	return resp.Succeeded, nil
 }
 
-func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.MemberEvent, error) {
-	nodeAsgPath := config.NodeAssignmentsPath(nodeID)
+func (s *Store) SubscribeEvents(ctx context.Context, nodeAsgPath string) (<-chan models.MemberEvent, error) {
 	_, rev, err := s.NodeAssignments(ctx, nodeAsgPath)
 	if err != nil {
 		return nil, err
@@ -198,7 +203,7 @@ func (s *Store) notifyEvent(ch chan<- models.MemberEvent, ev models.MemberEvent)
 }
 
 func (s *Store) runLeaderWatcher(ctx context.Context, ch chan<- models.MemberEvent) {
-	wChan := s.cli.Watch(ctx, config.ClusterLeaderKey)
+	wChan := s.cli.Watch(ctx, s.leaderKey)
 	for {
 		select {
 		case <-ctx.Done():
@@ -217,7 +222,7 @@ func (s *Store) runLeaderWatcher(ctx context.Context, ch chan<- models.MemberEve
 }
 
 func (s *Store) runTicker(ctx context.Context, ch chan<- models.MemberEvent) {
-	tk := time.NewTicker(config.ReconcileInterval)
+	tk := time.NewTicker(s.reconcileInterval)
 	defer tk.Stop()
 
 	for {
@@ -235,7 +240,7 @@ func (s *Store) runAssignmentWatch(ctx context.Context, nodeAsgPath string, rev 
 		if !s.watchAssignmentLoop(ctx, nodeAsgPath, &rev, ch) {
 			return
 		}
-		t := time.NewTimer(config.WatchReconnectDelay)
+		t := time.NewTimer(s.watchReconnectDelay)
 		select {
 		case <-ctx.Done():
 			t.Stop()

@@ -75,3 +75,9 @@ XVII: Refactored HTTPServerAdapter to Eliminate Logging and Return Runtime Error
     - Removed log package imports from go-controller/src/adapters/http-server.go.
     - Updated Start signature to return a buffered error channel (<-chan error) for server lifecycle errors.
     - Stripped startup, shutdown, and internal handler error log statements from HTTPServerAdapter, relying entirely on channel error propagation and HTTP response statuses.
+
+XVIII: Decoupled Adapters from Core Config and Domain Roles
+    - Parameterized all adapter hardcoded values and removed direct imports of `core/config` and `core/roles`.
+    - Added configurable constructor fields to `DockerAdapter` (`binaryPath`, `composeCmd`, `upArgs`, `downArgs`), `HTTPClientAdapter` (`assimilateURLPattern`, `activateURLPattern`), `OsAdapter` (`envFileName`, `filePerms`, `envTemplate`), `TailscaleAdapter` (`binaryPath`, `envKey`), and `Store` (`leaderKey`, `reconcileInterval`, `watchReconnectDelay`).
+    - Moved `DomainHandler` definition to `models` package to allow `HTTPServerAdapter` to exclusively import `models`.
+    - Updated `main.go` to construct and wire all parameterized adapters using values from `config`.
