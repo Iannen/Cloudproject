@@ -2,7 +2,6 @@ package roles
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
@@ -45,7 +44,6 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 }
 
 func (m *MemberRole) runSession(sCtx context.Context, sess *concurrency.Session, nodeID string) error {
-
 	if isLeader, err := m.store.ClaimLeader(sCtx, sess, config.ClusterLeaderKey, nodeID); err == nil && isLeader {
 		log.Println("[Member] Won leadership! Launching Leader Role...")
 		_ = m.registry.Start(&models.Assignment{
@@ -55,13 +53,12 @@ func (m *MemberRole) runSession(sCtx context.Context, sess *concurrency.Session,
 		})
 	}
 
-	initIDs, rev, err := m.store.NodeAssignments(sCtx, config.NodeAssignmentsPath(nodeID))
+	_, rev, err := m.store.NodeAssignments(sCtx, config.NodeAssignmentsPath(nodeID))
 	if err != nil {
 		return err
 	}
 
-	m.reconcile(sCtx, initIDs)
-
+	m.reconcile(sCtx, nodeID)
 	ch := m.createEventChannel(sCtx, nodeID, rev)
 
 	for {
@@ -72,19 +69,8 @@ func (m *MemberRole) runSession(sCtx context.Context, sess *concurrency.Session,
 		case <-sess.Done():
 			return errors.New("session lease expired")
 
-		case e := <-ch:
-			var targets []string
-			if e.kind == evtWatch && e.hasIDs {
-				targets = e.ids
-			} else {
-				ids, _, err := m.store.NodeAssignments(sCtx, config.NodeAssignmentsPath(nodeID))
-				if err != nil {
-					log.Printf("[Member] Error updating assignment state: %v", err)
-					continue
-				}
-				targets = ids
-			}
-			m.reconcile(sCtx, targets)
+		case <-ch:
+			m.reconcile(sCtx, nodeID)
 		}
 	}
 }
@@ -99,7 +85,13 @@ func (m *MemberRole) stopManagedAssignments() {
 	}
 }
 
-func (m *MemberRole) reconcile(ctx context.Context, ids []string) {
+func (m *MemberRole) reconcile(ctx context.Context, nodeID string) {
+	ids, _, err := m.store.NodeAssignments(ctx, config.NodeAssignmentsPath(nodeID))
+	if err != nil {
+		log.Printf("[Member] Error updating assignment state: %v", err)
+		return
+	}
+
 	want := make(map[string]bool, len(ids))
 	for _, id := range ids {
 		want[id] = true
@@ -147,19 +139,6 @@ func NewMemberAssignment(nodeID string) *models.Assignment {
 	}
 }
 
-type eventType int
-
-const (
-	evtTick eventType = iota
-	evtWatch
-)
-
-type event struct {
-	kind   eventType
-	ids    []string
-	hasIDs bool
-}
-
 func NewMemberRole(store ParticipantStore, registry RoleMgr) *MemberRole {
 	return &MemberRole{
 		store:    store,
@@ -167,15 +146,22 @@ func NewMemberRole(store ParticipantStore, registry RoleMgr) *MemberRole {
 	}
 }
 
-func (m *MemberRole) createEventChannel(ctx context.Context, nodeID string, rev int64) <-chan event {
-	ch := make(chan event, 10)
+func (m *MemberRole) createEventChannel(ctx context.Context, nodeID string, rev int64) <-chan struct{} {
+	ch := make(chan struct{}, 10)
 	m.startLeaderWatcher(ctx, ch)
 	m.startWatch(ctx, nodeID, rev, ch)
 	m.startTicker(ctx, ch)
 	return ch
 }
 
-func (m *MemberRole) startTicker(ctx context.Context, ch chan<- event) {
+func (m *MemberRole) notifySignal(ch chan<- struct{}) {
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
+}
+
+func (m *MemberRole) startTicker(ctx context.Context, ch chan<- struct{}) {
 	go func() {
 		tk := time.NewTicker(config.ReconcileInterval)
 		defer tk.Stop()
@@ -185,16 +171,13 @@ func (m *MemberRole) startTicker(ctx context.Context, ch chan<- event) {
 			case <-ctx.Done():
 				return
 			case <-tk.C:
-				select {
-				case ch <- event{kind: evtTick}:
-				default:
-				}
+				m.notifySignal(ch)
 			}
 		}
 	}()
 }
 
-func (m *MemberRole) startLeaderWatcher(ctx context.Context, ch chan<- event) {
+func (m *MemberRole) startLeaderWatcher(ctx context.Context, ch chan<- struct{}) {
 	delCh := make(chan struct{}, 1)
 	go m.store.WatchLeaderKey(ctx, config.ClusterLeaderKey, delCh)
 
@@ -203,15 +186,12 @@ func (m *MemberRole) startLeaderWatcher(ctx context.Context, ch chan<- event) {
 		case <-ctx.Done():
 			return
 		case <-delCh:
-			select {
-			case ch <- event{kind: evtTick}:
-			default:
-			}
+			m.notifySignal(ch)
 		}
 	}()
 }
 
-func (m *MemberRole) startWatch(ctx context.Context, nodeID string, rev int64, ch chan<- event) {
+func (m *MemberRole) startWatch(ctx context.Context, nodeID string, rev int64, ch chan<- struct{}) {
 	go func() {
 		for {
 			if !m.watchLoop(ctx, nodeID, &rev, ch) {
@@ -228,7 +208,7 @@ func (m *MemberRole) startWatch(ctx context.Context, nodeID string, rev int64, c
 	}()
 }
 
-func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, ch chan<- event) bool {
+func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, ch chan<- struct{}) bool {
 	wCh := m.store.WatchAssignments(ctx, config.NodeAssignmentsPath(nodeID), *rev+1)
 
 	for {
@@ -246,17 +226,8 @@ func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, c
 				*rev = resp.Header.Revision
 			}
 
-			for _, ev := range resp.Events {
-				var ids []string
-				if ev.Type != clientv3.EventTypeDelete {
-					if err := json.Unmarshal(ev.Kv.Value, &ids); err != nil {
-						continue
-					}
-				}
-				select {
-				case ch <- event{kind: evtWatch, ids: ids, hasIDs: true}:
-				default:
-				}
+			if len(resp.Events) > 0 {
+				m.notifySignal(ch)
 			}
 		}
 	}

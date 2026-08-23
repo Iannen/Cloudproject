@@ -49,3 +49,8 @@ XIII: NodeRole.handleInit Idempotency Upgrade
     - Replaced docker-based `IsEtcdRunning` check with internal state query via `n.reg.IsActive("member-" + nodeID)`.
     - Added `IsActive` method to `RoleMgr` interface and `Registry`.
     - Cleaned up unused `IsEtcdRunning` interface methods.
+
+XIV: MemberRole Edge-Triggered Reconciliation & Session Delegation
+    - Refactored `MemberRole` session establishment to delegate retries and backoff handling to `ParticipantStore.NewSession`.
+    - Transitioned `MemberRole` watching mechanism to an edge-triggered model where `watchLoop` acts strictly as a signal producer.
+    - Consolidated state fetching and assignment diffing into `MemberRole.reconcile`, eliminating duplicate logic in `runSession`.

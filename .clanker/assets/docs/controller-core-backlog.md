@@ -19,13 +19,13 @@ II. Medium term goals
 III. Immediate Goals
 
 [ ] Clean up member role
-    [x] Refactor store.NewSession to handle backoffs & retries
-        - Old signature: NewSession(ctx context.Context, ttl int64) (*concurrency.Session, error)
-        - New signature: NewSession(ctx context.Context, ttl int64, retries int, interval time.Duration) (*concurrency.Session, error)
-    [x] Delegate session retry loop in MemberRole to ParticipantStore using new configuration parameters
-    [ ] Investigate moving the session acquistion out of the for loop, considering it a setup phase of the member. 
+    Intent: Eliminate etcd leak (`clientv3`, `concurrency`) from domain code into adapter boundaries.
+    Scope: `core/models/models.go`, `core/roles/member.go`, `adapters/etcd_store.go` (zero changes to `registry.go`).
+    [ ] Abstract `concurrency.Session` into a domain session handle interface exposing lifecycle signals.
+    [ ] Define domain-level event models/channels for member notifications in `models.go`.
+    [ ] Replace direct watcher/ticker goroutines in `member.go` with an adapter-managed `SubscribeEvents(ctx, nodeID)` method.
+    [ ] Move watch multiplexing, revision tracking, tickers, and reconnect handling into `etcd_store.go`.
 
 IV. Idea bucket:
 
 V. Known Bugs:
-
