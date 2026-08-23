@@ -12,22 +12,26 @@ import (
 )
 
 type HTTPClientAdapter struct {
-	client *http.Client
+	client        *http.Client
+	assimilateURL string
+	activateURL   string
 }
 
-func NewHTTPClientAdapter(timeout time.Duration) *HTTPClientAdapter {
+func NewHTTPClientAdapter(timeout time.Duration, assimilateURLPattern, activateURLPattern string) *HTTPClientAdapter {
 	return &HTTPClientAdapter{
 		client: &http.Client{
 			Timeout: timeout,
 		},
+		assimilateURL: assimilateURLPattern,
+		activateURL:   activateURLPattern,
 	}
 }
 
 func (c *HTTPClientAdapter) WaitEndpointReady(ctx context.Context, endpoint string, retries int, interval time.Duration) error {
 	for i := 0; i < retries; i++ {
-		c, err := net.DialTimeout("tcp", endpoint, interval)
+		conn, err := net.DialTimeout("tcp", endpoint, interval)
 		if err == nil {
-			_ = c.Close()
+			_ = conn.Close()
 			return nil
 		}
 
@@ -46,7 +50,7 @@ func (c *HTTPClientAdapter) Assimilate(ctx context.Context, targetIP string, pay
 		return fmt.Errorf("failed to marshal assimilate payload: %w", err)
 	}
 
-	url := fmt.Sprintf("http://%s:8080/assimilate", targetIP)
+	url := fmt.Sprintf(c.assimilateURL, targetIP)
 	if !c.Post(ctx, url, b) {
 		return fmt.Errorf("failed to post assimilate payload to %s", url)
 	}
@@ -55,7 +59,7 @@ func (c *HTTPClientAdapter) Assimilate(ctx context.Context, targetIP string, pay
 }
 
 func (c *HTTPClientAdapter) Activate(ctx context.Context, targetIP string) error {
-	url := fmt.Sprintf("http://%s:8080/activate", targetIP)
+	url := fmt.Sprintf(c.activateURL, targetIP)
 	if !c.Post(ctx, url, nil) {
 		return fmt.Errorf("failed to post activate request to %s", url)
 	}

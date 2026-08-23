@@ -10,10 +10,11 @@ III. Immediate Goals (consider these first)
 
 [ ] Adapters should not contain hardcoded values, nor should they access core/config directly.
     The values should be passed in the method, or supplied in the constructor.
+    No adapter should carry default values.
     [ ] `go-controller/src/adapters/etcd-store.go`
         [ ] Remove import of `core/config`.
         [ ] Pass `leaderKey`, `reconcileInterval`, and `reconnectDelay` as parameters to `SubscribeEvents` (or via `Store` constructor) and forward them to watcher goroutines.
-    [ ] `go-controller/src/adapters/http-client.go`
+    [x] `go-controller/src/adapters/http-client.go`
         [ ] Parameterize target base URL / port (`8080`) and path endpoints for `Assimilate` and `Activate`.
     [x] `go-controller/src/adapters/docker.go`
         [ ] Move executable name (`docker`) and subcommand flags (`compose`, `up`, `down`, etc.) to configurable struct fields or method options.

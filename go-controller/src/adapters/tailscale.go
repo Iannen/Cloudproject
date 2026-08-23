@@ -16,12 +16,6 @@ type TailscaleAdapter struct {
 }
 
 func NewTailscaleAdapter(binaryPath, envKey string) *TailscaleAdapter {
-	if binaryPath == "" {
-		binaryPath = "tailscale"
-	}
-	if envKey == "" {
-		envKey = "TAILSCALE_IP"
-	}
 	return &TailscaleAdapter{
 		binaryPath: binaryPath,
 		envKey:     envKey,
