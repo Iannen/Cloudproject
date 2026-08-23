@@ -21,37 +21,30 @@ type MemberRole struct {
 
 func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 	nodeID := config.NodeID()
-	log.Printf("[Member] Permanent member role started for node %s", nodeID)
+	log.Printf("[Member] Member role starting setup for node %s", nodeID)
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
+	sess, err := m.store.NewSession(ctx, config.SessionTTL, config.StartupRetries, config.RetryInterval)
+	if err != nil {
+		log.Printf("[Member] Failed to establish initial session: %v", err)
+		return
+	}
 
-		sess, err := m.store.NewSession(ctx, config.SessionTTL, config.StartupRetries, config.RetryInterval)
-		if err != nil {
-			log.Printf("[Member] Failed to establish fresh session: %v", err)
-			return
-		}
-
-		sCtx, cancel := context.WithCancel(ctx)
-		if err := m.runSession(sCtx, sess, nodeID); err != nil {
-			log.Printf("[Member] Session ended: %v", err)
-		}
-
-		cancel()
+	defer func() {
 		_ = sess.Close()
 		m.stopManagedAssignments()
+	}()
+	hbKey := config.NodeHeartbeatPath(nodeID)
+	if err := m.store.PutWithSession(ctx, sess, hbKey, "alive"); err != nil {
+		log.Printf("[Member] Failed to register heartbeat presence: %v", err)
+		return
+	}
+
+	if err := m.runSession(ctx, sess, nodeID); err != nil {
+		log.Printf("[Member] Session terminated: %v", err)
 	}
 }
 
 func (m *MemberRole) runSession(sCtx context.Context, sess *concurrency.Session, nodeID string) error {
-	hbKey := config.NodeHeartbeatPath(nodeID)
-	if err := m.store.PutWithSession(sCtx, sess, hbKey, "alive"); err != nil {
-		return err
-	}
 
 	if isLeader, err := m.store.ClaimLeader(sCtx, sess, config.ClusterLeaderKey, nodeID); err == nil && isLeader {
 		log.Println("[Member] Won leadership! Launching Leader Role...")
@@ -69,10 +62,7 @@ func (m *MemberRole) runSession(sCtx context.Context, sess *concurrency.Session,
 
 	m.reconcile(sCtx, initIDs)
 
-	ch := make(chan event, 10)
-	m.startLeaderWatcher(sCtx, ch)
-	m.startWatch(sCtx, nodeID, rev, ch)
-	m.startTicker(sCtx, ch)
+	ch := m.createEventChannel(sCtx, nodeID, rev)
 
 	for {
 		select {
@@ -137,6 +127,52 @@ func (m *MemberRole) reconcile(ctx context.Context, ids []string) {
 			}
 		}
 	}
+}
+
+type ParticipantStore interface {
+	NodeAssignments(ctx context.Context, nodeAsgPath string) ([]string, int64, error)
+	WatchAssignments(ctx context.Context, nodeAsgPath string, rev int64) clientv3.WatchChan
+	AssignmentDef(ctx context.Context, asgDefPath string) (*models.Assignment, error)
+	NewSession(ctx context.Context, ttl int64, retries int, interval time.Duration) (*concurrency.Session, error)
+	PutWithSession(ctx context.Context, sess *concurrency.Session, key string, value string) error
+	ClaimLeader(ctx context.Context, sess *concurrency.Session, leaderKey, nodeID string) (bool, error)
+	WatchLeaderKey(ctx context.Context, leaderKey string, notifyChan chan<- struct{})
+}
+
+func NewMemberAssignment(nodeID string) *models.Assignment {
+	return &models.Assignment{
+		NodeID: nodeID,
+		ID:     "member-" + nodeID,
+		Role:   "member",
+	}
+}
+
+type eventType int
+
+const (
+	evtTick eventType = iota
+	evtWatch
+)
+
+type event struct {
+	kind   eventType
+	ids    []string
+	hasIDs bool
+}
+
+func NewMemberRole(store ParticipantStore, registry RoleMgr) *MemberRole {
+	return &MemberRole{
+		store:    store,
+		registry: registry,
+	}
+}
+
+func (m *MemberRole) createEventChannel(ctx context.Context, nodeID string, rev int64) <-chan event {
+	ch := make(chan event, 10)
+	m.startLeaderWatcher(ctx, ch)
+	m.startWatch(ctx, nodeID, rev, ch)
+	m.startTicker(ctx, ch)
+	return ch
 }
 
 func (m *MemberRole) startTicker(ctx context.Context, ch chan<- event) {
@@ -223,43 +259,5 @@ func (m *MemberRole) watchLoop(ctx context.Context, nodeID string, rev *int64, c
 				}
 			}
 		}
-	}
-}
-
-type ParticipantStore interface {
-	NodeAssignments(ctx context.Context, nodeAsgPath string) ([]string, int64, error)
-	WatchAssignments(ctx context.Context, nodeAsgPath string, rev int64) clientv3.WatchChan
-	AssignmentDef(ctx context.Context, asgDefPath string) (*models.Assignment, error)
-	NewSession(ctx context.Context, ttl int64, retries int, interval time.Duration) (*concurrency.Session, error)
-	PutWithSession(ctx context.Context, sess *concurrency.Session, key string, value string) error
-	ClaimLeader(ctx context.Context, sess *concurrency.Session, leaderKey, nodeID string) (bool, error)
-	WatchLeaderKey(ctx context.Context, leaderKey string, notifyChan chan<- struct{})
-}
-
-func NewMemberAssignment(nodeID string) *models.Assignment {
-	return &models.Assignment{
-		NodeID: nodeID,
-		ID:     "member-" + nodeID,
-		Role:   "member",
-	}
-}
-
-type eventType int
-
-const (
-	evtTick eventType = iota
-	evtWatch
-)
-
-type event struct {
-	kind   eventType
-	ids    []string
-	hasIDs bool
-}
-
-func NewMemberRole(store ParticipantStore, registry RoleMgr) *MemberRole {
-	return &MemberRole{
-		store:    store,
-		registry: registry,
 	}
 }
