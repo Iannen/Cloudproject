@@ -1,0 +1,2 @@
+- adapters are forbidden from importing any core package
+    - except for package models. 
