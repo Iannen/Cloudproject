@@ -16,15 +16,9 @@ II. Medium term goals
     [ ] Preserve necessary child contexts in AssignmentRuntime (role isolation) and MemberRole (etcd session cleanup)
     [ ] Replace context.Background() in Recruiter.recruit defer cleanup with a bounded timeout context
 
-III. Immediate Goals
+III. Immediate Goals (consider these)
 
 [ ] Clean up member role
-    Intent: Eliminate etcd leak (`clientv3`, `concurrency`) from domain code into adapter boundaries.
-    Scope: `core/models/models.go`, `core/roles/member.go`, `adapters/etcd_store.go` (zero changes to `registry.go`).
-    [ ] Abstract `concurrency.Session` into a domain session handle interface exposing lifecycle signals.
-    [ ] Define domain-level event models/channels for member notifications in `models.go`.
-    [ ] Replace direct watcher/ticker goroutines in `member.go` with an adapter-managed `SubscribeEvents(ctx, nodeID)` method.
-    [ ] Move watch multiplexing, revision tracking, tickers, and reconnect handling into `etcd_store.go`.
 
 IV. Idea bucket:
 

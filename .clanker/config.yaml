@@ -22,7 +22,7 @@ kb_def:
 domains:
 - name: c-core
   resolvers:
-  - {id: repo_content, type: repo_content, includes: [go-controller/src], excludes: [go-controller/src/adapters, go-controller/src/core/roles/member.bak], sorting: normal} 
+  - {id: repo_content, type: repo_content, includes: [go-controller/src], excludes: [go-controller/src/adapters], sorting: normal} 
   - {id: domain_fragments, type: multi-document-retrieval, files: [controller.md, controller-core-backlog.md]}
   renders:
   - name: plan

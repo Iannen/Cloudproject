@@ -45,3 +45,25 @@ type TSStatus struct {
 	Peer map[string]*TSPeer `json:"Peer"`
 	Self *TSPeer            `json:"Self"`
 }
+
+// --- Domain Infrastructure Handles & Events ---
+
+// Session represents an abstract cluster session with a lifecycle signal.
+type Session interface {
+	Done() <-chan struct{}
+	Close() error
+}
+
+// MemberEvent represents triggers that require the member role to reconcile assignment state.
+type MemberEventType string
+
+const (
+	EventAssignmentChange MemberEventType = "ASSIGNMENT_CHANGE"
+	EventLeaderDeleted    MemberEventType = "LEADER_DELETED"
+	EventReconcileTick    MemberEventType = "RECONCILE_TICK"
+)
+
+type MemberEvent struct {
+	Type MemberEventType
+	Err  error
+}

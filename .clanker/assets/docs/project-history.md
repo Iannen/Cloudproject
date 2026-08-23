@@ -54,3 +54,8 @@ XIV: MemberRole Edge-Triggered Reconciliation & Session Delegation
     - Refactored `MemberRole` session establishment to delegate retries and backoff handling to `ParticipantStore.NewSession`.
     - Transitioned `MemberRole` watching mechanism to an edge-triggered model where `watchLoop` acts strictly as a signal producer.
     - Consolidated state fetching and assignment diffing into `MemberRole.reconcile`, eliminating duplicate logic in `runSession`.
+
+XV: MemberRole Etcd Decoupling & Event Model Refactoring
+    - Abstracted etcd concurrency session handling behind a domain `models.Session` interface.
+    - Defined `MemberEvent` types (`ASSIGNMENT_CHANGE`, `LEADER_DELETED`, `RECONCILE_TICK`) and domain channels in `models.go`.
+    - Shifted watch multiplexing, revision tracking, tickers, and reconnect handling out of `member.go` into `SubscribeEvents` inside `ParticipantStore`.

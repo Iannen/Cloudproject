@@ -3,13 +3,27 @@ package adapters
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"time"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
+
+type etcdSession struct {
+	sess *concurrency.Session
+}
+
+func (e *etcdSession) Done() <-chan struct{} {
+	return e.sess.Done()
+}
+
+func (e *etcdSession) Close() error {
+	return e.sess.Close()
+}
 
 type Store struct {
 	cli *clientv3.Client
@@ -86,13 +100,13 @@ func (s *Store) CreateAssignment(ctx context.Context, asgDefPath, nodeAsgPath st
 	return nil
 }
 
-func (s *Store) NewSession(ctx context.Context, ttl int64, retries int, interval time.Duration) (*concurrency.Session, error) {
+func (s *Store) NewSession(ctx context.Context, ttl int64, retries int, interval time.Duration) (models.Session, error) {
 	var err error
 	for i := 0; i < retries; i++ {
 		var sess *concurrency.Session
 		sess, err = concurrency.NewSession(s.cli, concurrency.WithTTL(int(ttl)), concurrency.WithContext(ctx))
 		if err == nil {
-			return sess, nil
+			return &etcdSession{sess: sess}, nil
 		}
 
 		select {
@@ -104,8 +118,12 @@ func (s *Store) NewSession(ctx context.Context, ttl int64, retries int, interval
 	return nil, err
 }
 
-func (s *Store) PutWithSession(ctx context.Context, sess *concurrency.Session, key, val string) error {
-	_, err := s.cli.Put(ctx, key, val, clientv3.WithLease(sess.Lease()))
+func (s *Store) PutWithSession(ctx context.Context, sess models.Session, key, val string) error {
+	eSess, ok := sess.(*etcdSession)
+	if !ok {
+		return fmt.Errorf("invalid session type provided")
+	}
+	_, err := s.cli.Put(ctx, key, val, clientv3.WithLease(eSess.sess.Lease()))
 	return err
 }
 
@@ -124,10 +142,6 @@ func (s *Store) AssignmentDef(ctx context.Context, asgDefPath string) (*models.A
 	return &a, nil
 }
 
-func (s *Store) WatchAssignments(ctx context.Context, nodeAsgPath string, rev int64) clientv3.WatchChan {
-	return s.cli.Watch(ctx, nodeAsgPath, clientv3.WithRev(rev))
-}
-
 func (s *Store) NodeAssignments(ctx context.Context, nodeAsgPath string) ([]string, int64, error) {
 	resp, err := s.cli.Get(ctx, nodeAsgPath)
 	if err != nil {
@@ -144,10 +158,14 @@ func (s *Store) NodeAssignments(ctx context.Context, nodeAsgPath string) ([]stri
 	return ids, rev, nil
 }
 
-func (s *Store) ClaimLeader(ctx context.Context, sess *concurrency.Session, leaderKey, nodeID string) (bool, error) {
+func (s *Store) ClaimLeader(ctx context.Context, sess models.Session, leaderKey, nodeID string) (bool, error) {
+	eSess, ok := sess.(*etcdSession)
+	if !ok {
+		return false, fmt.Errorf("invalid session type provided")
+	}
 	resp, err := s.cli.Txn(ctx).
 		If(clientv3.Compare(clientv3.CreateRevision(leaderKey), "=", 0)).
-		Then(clientv3.OpPut(leaderKey, nodeID, clientv3.WithLease(sess.Lease()))).
+		Then(clientv3.OpPut(leaderKey, nodeID, clientv3.WithLease(eSess.sess.Lease()))).
 		Else(clientv3.OpGet(leaderKey)).
 		Commit()
 	if err != nil {
@@ -156,24 +174,104 @@ func (s *Store) ClaimLeader(ctx context.Context, sess *concurrency.Session, lead
 	return resp.Succeeded, nil
 }
 
-func (s *Store) WatchLeaderKey(ctx context.Context, leaderKey string, ch chan<- struct{}) {
-	chWatch := s.cli.Watch(ctx, leaderKey)
+func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.MemberEvent, error) {
+	nodeAsgPath := config.NodeAssignmentsPath(nodeID)
+	_, rev, err := s.NodeAssignments(ctx, nodeAsgPath)
+	if err != nil {
+		return nil, err
+	}
+
+	ch := make(chan models.MemberEvent, 10)
+
+	go s.runLeaderWatcher(ctx, ch)
+	go s.runTicker(ctx, ch)
+	go s.runAssignmentWatch(ctx, nodeAsgPath, rev, ch)
+
+	return ch, nil
+}
+
+func (s *Store) notifyEvent(ch chan<- models.MemberEvent, ev models.MemberEvent) {
+	select {
+	case ch <- ev:
+	default:
+	}
+}
+
+func (s *Store) runLeaderWatcher(ctx context.Context, ch chan<- models.MemberEvent) {
+	wChan := s.cli.Watch(ctx, config.ClusterLeaderKey)
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case resp, ok := <-chWatch:
+		case resp, ok := <-wChan:
 			if !ok {
 				return
 			}
 			for _, ev := range resp.Events {
 				if ev.Type == clientv3.EventTypeDelete {
-					select {
-					case ch <- struct{}{}:
-					default:
-					}
-					return
+					s.notifyEvent(ch, models.MemberEvent{Type: models.EventLeaderDeleted})
 				}
+			}
+		}
+	}
+}
+
+func (s *Store) runTicker(ctx context.Context, ch chan<- models.MemberEvent) {
+	tk := time.NewTicker(config.ReconcileInterval)
+	defer tk.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tk.C:
+			s.notifyEvent(ch, models.MemberEvent{Type: models.EventReconcileTick})
+		}
+	}
+}
+
+func (s *Store) runAssignmentWatch(ctx context.Context, nodeAsgPath string, rev int64, ch chan<- models.MemberEvent) {
+	for {
+		if !s.watchAssignmentLoop(ctx, nodeAsgPath, &rev, ch) {
+			return
+		}
+		t := time.NewTimer(config.WatchReconnectDelay)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return
+		case <-t.C:
+		}
+	}
+}
+
+func (s *Store) watchAssignmentLoop(ctx context.Context, nodeAsgPath string, rev *int64, ch chan<- models.MemberEvent) bool {
+	wCh := s.cli.Watch(ctx, nodeAsgPath, clientv3.WithRev(*rev+1))
+
+	for {
+		select {
+		case <-ctx.Done():
+			return false
+		case resp, ok := <-wCh:
+			if !ok {
+				return true
+			}
+			if resp.Canceled {
+				if errors.Is(resp.Err(), context.Canceled) {
+					return false
+				}
+				s.notifyEvent(ch, models.MemberEvent{
+					Type: models.EventAssignmentChange,
+					Err:  resp.Err(),
+				})
+				return true
+			}
+			if resp.Header.Revision > *rev {
+				*rev = resp.Header.Revision
+			}
+
+			if len(resp.Events) > 0 {
+				s.notifyEvent(ch, models.MemberEvent{Type: models.EventAssignmentChange})
 			}
 		}
 	}
