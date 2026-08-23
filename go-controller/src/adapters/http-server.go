@@ -2,11 +2,10 @@ package adapters
 
 import (
 	"context"
+	"go-controller/src/core/models"
 	"io"
 	"net/http"
 	"time"
-
-	"go-controller/src/core/roles"
 )
 
 type HTTPServerAdapter struct {
@@ -20,7 +19,7 @@ func NewHTTPServerAdapter() *HTTPServerAdapter {
 	}
 }
 
-func (s *HTTPServerAdapter) RegisterGetRoute(pattern string, handler roles.DomainHandler) {
+func (s *HTTPServerAdapter) RegisterGetRoute(pattern string, handler models.DomainHandler) {
 	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -30,7 +29,7 @@ func (s *HTTPServerAdapter) RegisterGetRoute(pattern string, handler roles.Domai
 	})
 }
 
-func (s *HTTPServerAdapter) RegisterPostRoute(pattern string, handler roles.DomainHandler) {
+func (s *HTTPServerAdapter) RegisterPostRoute(pattern string, handler models.DomainHandler) {
 	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -40,7 +39,7 @@ func (s *HTTPServerAdapter) RegisterPostRoute(pattern string, handler roles.Doma
 	})
 }
 
-func (s *HTTPServerAdapter) handleDomainRequest(w http.ResponseWriter, r *http.Request, handler roles.DomainHandler) {
+func (s *HTTPServerAdapter) handleDomainRequest(w http.ResponseWriter, r *http.Request, handler models.DomainHandler) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "failed to read request body", http.StatusBadRequest)

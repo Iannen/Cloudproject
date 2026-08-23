@@ -105,11 +105,9 @@ func (n *NodeRole) activateMember() error {
 	return n.reg.Start(assignment)
 }
 
-type DomainHandler func(ctx context.Context, body []byte) (string, error)
-
 type HTTPServer interface {
-	RegisterGetRoute(pattern string, handler DomainHandler)
-	RegisterPostRoute(pattern string, handler DomainHandler)
+	RegisterGetRoute(pattern string, handler models.DomainHandler)
+	RegisterPostRoute(pattern string, handler models.DomainHandler)
 	Start(addr string, clientTimeout time.Duration) <-chan error
 	Shutdown(ctx context.Context) error
 }

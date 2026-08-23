@@ -1,6 +1,9 @@
 package models
 
-import "encoding/json"
+import (
+	"context"
+	"encoding/json"
+)
 
 // --- Domain Entities ---
 
@@ -67,3 +70,5 @@ type MemberEvent struct {
 	Type MemberEventType
 	Err  error
 }
+
+type DomainHandler func(ctx context.Context, body []byte) (string, error)
