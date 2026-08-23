@@ -15,21 +15,6 @@ II. Medium term goals
     [ ] Preserve necessary child contexts in AssignmentRuntime (role isolation) and MemberRole (etcd session cleanup)
     [ ] Replace context.Background() in Recruiter.recruit defer cleanup with a bounded timeout context
 
-[ ] Refactor NodeRole HTTP transport boundary
-    [ ] Replace `HTTPServer` interface in `core/roles/node.go` with domain-handler routing:
-        ```go
-        type DomainHandler func(ctx context.Context, body []byte) (string, error)
-
-        type HTTPServer interface {
-            RegisterGetRoute(pattern string, handler DomainHandler)
-            RegisterPostRoute(pattern string, handler DomainHandler)
-            Start(addr string, clientTimeout time.Duration)
-            Shutdown(ctx context.Context) error
-        }
-        ```
-    [ ] Remove `net/http` import and manual HTTP status/error-writing logic from `core/roles/node.go`
-    [ ] Update `HTTPServerAdapter` to read request bodies, return HTTP 200 on success, and translate domain errors into standard HTTP status codes
-
 III. Immediate Goals (consider these)
 
 [ ] Clean up member role

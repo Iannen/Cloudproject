@@ -7,7 +7,6 @@ import (
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"log"
-	"net/http"
 	"time"
 )
 
@@ -20,7 +19,7 @@ type NodeRole struct {
 }
 
 func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) {
-	log.Printf("[NodeRole] Starting HTTP listener on %s for node %s", config.HTTPPort, a.NodeID)
+	log.Printf("[NodeRole] Starting server on port %s for node %s", config.HTTPPort, a.NodeID)
 	n.cms.Start(config.HTTPPort, config.Timeout)
 
 	<-ctx.Done()
@@ -35,85 +34,61 @@ func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) {
 	}
 }
 
-func (n *NodeRole) httpErr(w http.ResponseWriter, msg string, code int) {
-	log.Printf("[HTTP] %d: %s", code, msg)
-	http.Error(w, msg, code)
-}
-
-func (n *NodeRole) handleInit(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodGet {
-		n.httpErr(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+func (n *NodeRole) handleInit(ctx context.Context, body []byte) (string, error) {
 	id := config.NodeID()
 	if n.reg.IsActive("member-" + id) {
-		fmt.Fprintf(w, "Node %s already initialized.\n", id)
-		return
+		return fmt.Sprintf("Node %s already initialized.\n", id), nil
 	}
 
-	_ = n.dcr.ResetEtcd(r.Context(), config.BootstrapDir)
-	if err := n.dcr.StartEtcd(r.Context(), config.BootstrapDir); err != nil {
-		n.httpErr(w, fmt.Sprintf("etcd start failed: %v", err), http.StatusInternalServerError)
-		return
+	_ = n.dcr.ResetEtcd(ctx, config.BootstrapDir)
+	if err := n.dcr.StartEtcd(ctx, config.BootstrapDir); err != nil {
+		return "", fmt.Errorf("etcd start failed: %w", err)
 	}
 
-	if err := n.spk.WaitEndpointReady(r.Context(), config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil {
-		n.httpErr(w, "etcd ready check failed", http.StatusInternalServerError)
-		return
+	if err := n.spk.WaitEndpointReady(ctx, config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil {
+		return "", fmt.Errorf("etcd ready check failed: %w", err)
 	}
 
 	if err := n.activateMember(); err != nil {
-		n.httpErr(w, err.Error(), http.StatusInternalServerError)
-		return
+		return "", err
 	}
 
-	fmt.Fprintf(w, "Node %s initialized.\n", id)
+	return fmt.Sprintf("Node %s initialized.\n", id), nil
 }
 
-func (n *NodeRole) handleAssimilate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		n.httpErr(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
+func (n *NodeRole) handleAssimilate(ctx context.Context, body []byte) (string, error) {
 	var p models.AssimilatePayload
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		n.httpErr(w, fmt.Sprintf("invalid payload: %v", err), http.StatusBadRequest)
-		return
+	if err := json.Unmarshal(body, &p); err != nil {
+		return "", fmt.Errorf("invalid payload: %w", err)
 	}
 
-	if err := n.osa.WriteEnvConfig(r.Context(), config.NodeID(), config.BootstrapDir, p); err != nil {
-		n.httpErr(w, "config write failed", http.StatusInternalServerError)
-		return
+	if err := n.osa.WriteEnvConfig(ctx, config.NodeID(), config.BootstrapDir, p); err != nil {
+		return "", fmt.Errorf("config write failed: %w", err)
 	}
 
-	_ = n.dcr.ResetEtcd(r.Context(), config.BootstrapDir)
-	if err := n.dcr.StartEtcd(r.Context(), config.BootstrapDir); err != nil {
-		n.httpErr(w, fmt.Sprintf("etcd start failed: %v", err), http.StatusInternalServerError)
-		return
+	_ = n.dcr.ResetEtcd(ctx, config.BootstrapDir)
+	if err := n.dcr.StartEtcd(ctx, config.BootstrapDir); err != nil {
+		return "", fmt.Errorf("etcd start failed: %w", err)
 	}
 
-	if err := n.spk.WaitEndpointReady(r.Context(), config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil {
-		if r.Context().Err() != nil {
-			n.httpErr(w, "timeout", http.StatusRequestTimeout)
-			return
+	if err := n.spk.WaitEndpointReady(ctx, config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil {
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("timeout: %w", ctx.Err())
 		}
-		n.httpErr(w, "etcd socket timeout", http.StatusInternalServerError)
-		return
+		return "", fmt.Errorf("etcd socket timeout: %w", err)
 	}
-	w.Write([]byte("Learner ready.\n"))
+	return "Learner ready.\n", nil
 }
 
-func (n *NodeRole) handleActivate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		n.httpErr(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+func (n *NodeRole) handleActivate(ctx context.Context, body []byte) (string, error) {
 	if err := n.activateMember(); err != nil {
-		n.httpErr(w, err.Error(), http.StatusInternalServerError)
-		return
+		return "", err
 	}
-	fmt.Fprintf(w, "Node %s activated.\n", config.NodeID())
+	return fmt.Sprintf("Node %s activated.\n", config.NodeID()), nil
+}
+
+func (n *NodeRole) InitializeStore() error {
+	return n.reg.InitializeStore()
 }
 
 func (n *NodeRole) activateMember() error {
@@ -130,12 +105,11 @@ func (n *NodeRole) activateMember() error {
 	return n.reg.Start(assignment)
 }
 
-func (n *NodeRole) InitializeStore() error {
-	return n.reg.InitializeStore()
-}
+type DomainHandler func(ctx context.Context, body []byte) (string, error)
 
 type HTTPServer interface {
-	RegisterHandler(pattern string, handler http.HandlerFunc)
+	RegisterGetRoute(pattern string, handler DomainHandler)
+	RegisterPostRoute(pattern string, handler DomainHandler)
 	Start(addr string, clientTimeout time.Duration)
 	Shutdown(ctx context.Context) error
 }
@@ -153,8 +127,8 @@ type DockerMgr interface {
 
 func NewNodeRole(reg RoleMgr, dcr DockerMgr, osa FileMgr, cms HTTPServer, spk HealthChecker) *NodeRole {
 	n := &NodeRole{reg: reg, dcr: dcr, osa: osa, cms: cms, spk: spk}
-	n.cms.RegisterHandler("/initialize", n.handleInit)
-	n.cms.RegisterHandler("/assimilate", n.handleAssimilate)
-	n.cms.RegisterHandler("/activate", n.handleActivate)
+	n.cms.RegisterGetRoute("/initialize", n.handleInit)
+	n.cms.RegisterPostRoute("/assimilate", n.handleAssimilate)
+	n.cms.RegisterPostRoute("/activate", n.handleActivate)
 	return n
 }

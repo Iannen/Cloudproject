@@ -59,3 +59,8 @@ XV: MemberRole Etcd Decoupling & Event Model Refactoring
     - Abstracted etcd concurrency session handling behind a domain `models.Session` interface.
     - Defined `MemberEvent` types (`ASSIGNMENT_CHANGE`, `LEADER_DELETED`, `RECONCILE_TICK`) and domain channels in `models.go`.
     - Shifted watch multiplexing, revision tracking, tickers, and reconnect handling out of `member.go` into `SubscribeEvents` inside `ParticipantStore`.
+
+XVI: NodeRole HTTP Transport Boundary Refactoring
+    - Abstracted HTTP server behind `HTTPServer` interface and `DomainHandler` func types in `core/roles/node.go`.
+    - Removed `net/http` dependencies, status codes, and HTTP-specific error writing logic from `NodeRole`.
+    - Routing and response handling now execute via domain handlers (`/initialize`, `/assimilate`, `/activate`).
