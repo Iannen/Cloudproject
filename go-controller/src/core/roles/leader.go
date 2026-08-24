@@ -101,6 +101,14 @@ func (l *LeaderRole) pickNode(nodes []string, existing []models.Assignment) stri
 	return best
 }
 
+func NewLeaderAssignment(nodeID string) models.Assignment { // NewXXXAssignment should return value instead of pointer.
+	return models.Assignment{
+		NodeID: nodeID,
+		ID:     "leader-" + nodeID,
+		Role:   "leader",
+	}
+}
+
 func NewLeaderRole(store AssignmentStore) *LeaderRole {
 	return &LeaderRole{
 		store: store,

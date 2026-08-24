@@ -1,23 +1,21 @@
 I. Long term goals (ignore)
 
-II. Medium term goals (investigatory)
+[ ] Redesign role lifecycle architecture into a 3-tier hierarchy
+    - Tier 1 (NodeRole): Maintained directly by main.go as host process; exempt from registry
+    - Tier 2 (MemberRole): Managed directly by NodeRole via RPC/HTTP activation; exempt from registry; manages etcd session and elections
+    - Tier 3 (Dynamic Roles): Workloads managed exclusively by MemberRole via Registry (e.g., leader, tailscale-manager)
+    - Goal: Eliminate circular registry self-management and simplify MemberRole state recovery
 
-[x] Endure that cluster members will attempt to become leader when I take down leader node (to simulate power outage and such)
+II. Medium term goals (investigatory)
 
 [ ] Add etcd status endpoint, for easy and comprehensive diagnostics of etcd related issues
 
-[ ] Improve leader race logging. it should only log the outcome of the attempt, rather than a try + success / silent fail
-    2026/08/24 12:39:00 [Member] Leader key deleted. Attempting leadership claim...
-    2026/08/24 12:39:00 [Member] Won leadership! Launching Leader Role...
-
 III. Immediate Goals (consider these first)
 
-[ ] Refactor MemberRole leadership handling to use declarative assignment reconciliation
-    [ ] Decouple ClaimLeader from direct role invocation
-        - Update MemberRole so winning ClaimLeader writes a leader assignment definition to etcd rather than calling registry.Start directly
-    [ ] Normalize LeaderRole management inside reconcile()
-        - Ensure MemberRole relies solely on etcd assignment watch events to launch or terminate LeaderRole
-        - Allow reconcile() to handle LeaderRole teardown naturally when assignments drop or re-bind to another node
+[ ] Fix session lease expiration termination in MemberRole
+- Refactor MemberRole.Run to wrap session creation and runSession in an outer retry loop
+- Re-establish session, presence heartbeat, and event watchers upon session expiration or transient raft leader unavailability
+- Ensure managed non-core assignments (any but node and member per helper) are cleanly stopped before attempting session recovery
 
 IV. Idea bucket:
 
@@ -32,4 +30,4 @@ V. Bugs:
 |   http://100.65.82.53:2379 | 7558006d1a23d552 |  3.5.23 |   20 kB |     false |      false |         2 |         25 |                 25 |        |
 +----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
         2. leadernode 100.119.155.14 is 'qm stopped'
-        3. bug -> remaining 2 nodes both log '2026/08/24 10:51:31 [Member] Session terminated: session lease expired'
+        3. Root cause: when etcd Raft leader dies, remaining nodes fail to keepalive/renew their etcd session TTL during Raft election window, causing `sess.Done()` to fire ('Session terminated: session lease expired') before leadership claim can process.

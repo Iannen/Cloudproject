@@ -110,14 +110,7 @@ func (n *NodeRole) activateMember(_ context.Context) error {
 	if err := n.InitializeStore(); err != nil {
 		return fmt.Errorf("etcd connect failed: %w", err)
 	}
-
-	id := config.NodeID()
-	assignment := &models.Assignment{
-		NodeID: id,
-		ID:     "member-" + id,
-		Role:   "member",
-	}
-	return n.reg.Start(assignment)
+	return n.reg.Start(NewMemberAssignment(config.NodeID()))
 }
 
 type HTTPServer interface {

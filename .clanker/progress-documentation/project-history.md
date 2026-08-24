@@ -87,3 +87,9 @@ XIX: Completed HTTP Container Logging, Context Propagation, and Error Channel Ha
     - Updated handleInit, handleAssimilate, and handleActivate handlers in NodeRole to accept and propagate context.Context.
     - Streamlined AssignmentRuntime execution lifecycle using sync.WaitGroup and context cancellation.
     - Handled HTTP server lifecycle error channel returned by cms.Start in NodeRole.Run.
+
+XX: Refactored Leadership Claim Reconciliation, Event Handling, and Race Log Normalization
+    - Updated MemberRole.tryClaimLeadership to write a declarative leader assignment definition to etcd via CreateAssignment upon winning leadership, rather than invoking registry.Start directly.
+    - Simplified leadership race logging in tryClaimLeadership to report only the final outcome.
+    - Normalized LeaderRole lifecycle management so MemberRole relies solely on etcd watch events and assignment state reconciliation to launch or teardown LeaderRole.
+    - Handled LEADER_DELETED watch events in MemberRole event loop via typed event handling to trigger automatic leadership claim attempts upon leader key deletion.
