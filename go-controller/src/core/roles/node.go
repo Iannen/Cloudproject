@@ -30,7 +30,7 @@ func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) {
 			}
 		case <-ctx.Done():
 			log.Printf("[NodeRole] Shutting down HTTP listener for node %s", a.NodeID)
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), config.Timeout) //this seems legitimate, for now at least
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), config.Timeout) //hm do we have a 'shutdownctx' for the purpose of shuttind down cms? that seems like a weird pattern
 			defer cancel()
 
 			if err := n.cms.Shutdown(shutdownCtx); err != nil {
@@ -42,7 +42,7 @@ func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) {
 }
 
 func (n *NodeRole) handleInit(ctx context.Context, body []byte) (string, error) {
-	id := config.NodeID() //lets us not consider the .NodeId() part of things for now, although i recongnize its a smell
+	id := config.NodeID() //for now we just leave the nodeid alone
 	if n.reg.IsActive("member-" + id) {
 		return fmt.Sprintf("Node %s already initialized.\n", id), nil
 	}
@@ -52,7 +52,7 @@ func (n *NodeRole) handleInit(ctx context.Context, body []byte) (string, error) 
 		return "", fmt.Errorf("etcd start failed: %w", err)
 	}
 
-	if err := n.spk.WaitEndpointReady(ctx, config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil { //i think the adapter can receive all 3 in constructor. then method can be renamed to something that says we're probing etcd readiness
+	if err := n.spk.WaitEndpointReady(ctx, config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil { //ouch this violates my eyes!
 		return "", fmt.Errorf("etcd ready check failed: %w", err)
 	}
 
@@ -69,7 +69,7 @@ func (n *NodeRole) handleAssimilate(ctx context.Context, body []byte) (string, e
 		return "", fmt.Errorf("invalid payload: %w", err)
 	}
 
-	if err := n.osa.WriteEnvConfig(ctx, config.NodeID(), p); err != nil { //bootstrap dir via consturctor to osa, nodeid exempt for now
+	if err := n.osa.WriteEnvConfig(ctx, config.NodeID(), p); err != nil {
 		return "", fmt.Errorf("config write failed: %w", err)
 	}
 
@@ -78,7 +78,7 @@ func (n *NodeRole) handleAssimilate(ctx context.Context, body []byte) (string, e
 		return "", fmt.Errorf("etcd start failed: %w", err)
 	}
 
-	if err := n.spk.WaitEndpointReady(ctx, config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil { //all 3 config args -> to constructor
+	if err := n.spk.WaitEndpointReady(ctx, config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil { //another eye-violation omg
 		if ctx.Err() != nil {
 			return "", fmt.Errorf("timeout: %w", ctx.Err())
 		}
@@ -91,7 +91,7 @@ func (n *NodeRole) handleActivate(ctx context.Context, body []byte) (string, err
 	if err := n.activateMember(ctx); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("Node %s activated.\n", config.NodeID()), nil //nodeid exempt
+	return fmt.Sprintf("Node %s activated.\n", config.NodeID()), nil
 }
 
 func (n *NodeRole) handleGetLogs(ctx context.Context, body []byte) (string, error) {
@@ -110,7 +110,7 @@ func (n *NodeRole) activateMember(_ context.Context) error {
 	if err := n.InitializeStore(); err != nil {
 		return fmt.Errorf("etcd connect failed: %w", err)
 	}
-	return n.reg.Start(NewMemberAssignment(config.NodeID())) //nodeid exempt
+	return n.reg.Start(NewMemberAssignment(config.NodeID()))
 }
 
 type HTTPServer interface {

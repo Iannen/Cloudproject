@@ -17,7 +17,7 @@ type Recruiter struct {
 }
 
 func (t *Recruiter) Run(ctx context.Context, a *models.Assignment) {
-	tk := time.NewTicker(config.ReconcileInterval)
+	tk := time.NewTicker(config.ReconcileInterval) //i think ticker creation belongs inside an adapter, which returns a channel to the role which runs a eventloop. member already has such a thing going on (although that channel does not include a ticker afaik)
 	defer tk.Stop()
 
 	log.Printf("[TSMgr] Started: %s on %s", a.ID, a.NodeID)
@@ -49,7 +49,7 @@ func (t *Recruiter) reconcile(ctx context.Context) error {
 	}
 
 	for _, p := range peers {
-		if !p.Online || len(p.TailscaleIPs) == 0 || !strings.HasPrefix(p.HostName, config.NodeNamePrefix) {
+		if !p.Online || len(p.TailscaleIPs) == 0 || !strings.HasPrefix(p.HostName, config.NodeNamePrefix) { //a weird one. probably a justified config item
 			continue
 		}
 
@@ -98,7 +98,7 @@ func (t *Recruiter) recruit(ctx context.Context, p *models.TSPeer) error {
 	}
 
 	payload := models.AssimilatePayload{
-		LeaderName:         config.NodeID(),
+		LeaderName:         config.NodeID(), //config.NodeID() -> leave alone, a consideration for another day
 		LeaderPeerURL:      t.peerURL(locIP),
 		EtcdInitialCluster: strings.Join(toks, ","),
 		AssignedIP:         ip,

@@ -14,7 +14,7 @@ type LeaderRole struct {
 }
 
 func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment) {
-	tk := time.NewTicker(config.ReconcileInterval)
+	tk := time.NewTicker(config.ReconcileInterval) //TODO: consider pushing the ticker creation behind an adapter
 	defer tk.Stop()
 
 	log.Printf("[Leader] Started: %s on %s", a.ID, a.NodeID)
@@ -56,7 +56,7 @@ func (l *LeaderRole) reconcile(ctx context.Context) error {
 		}
 	}
 
-	for _, spec := range config.ClusterSpec {
+	for _, spec := range config.ClusterSpec { // the leader certainly needs the clusterspec. for now it can remain a config access
 		curr := byRole[spec.Name]
 		for i := 0; i < spec.Replicas-len(curr); i++ {
 			node := l.pickNode(nodes, curr)
@@ -102,7 +102,7 @@ func (l *LeaderRole) pickNode(nodes []string, existing []models.Assignment) stri
 	return best
 }
 
-func NewLeaderAssignment(nodeID string) models.Assignment { // NewXXXAssignment should return value instead of pointer.
+func NewLeaderAssignment(nodeID string) models.Assignment {
 	return models.Assignment{
 		NodeID: nodeID,
 		ID:     "leader-" + nodeID,
