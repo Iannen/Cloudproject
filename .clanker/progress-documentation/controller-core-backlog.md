@@ -16,12 +16,28 @@ II. Medium term goals (investigatory)
 [ ] Add etcd status endpoint, for easy and comprehensive diagnostics of etcd related issues
 
 [ ] Phase out core imports in acc with doctrine
-    [ ] Analysis of 'time' usages in core:
-        'config.go', basically fine
-        'leader.go' -> push id generation inside adapter boundary, eliminate time from leader.go
-        'member.go'
-            -> eliminate first time usage by changing 'm.store.NewSession' to handle retries internally (having received the interval in constructor)
-            -> eliminate second usage by similarly changing 'store.PutWithSession'. but we can also eliminate config.NodeHeartbeatPath usage by following the  pattern of passing the config value to the adapter on construction, and passing 'nodeId' to PutWithSession instead of 'hbKey'
+
+[ ] Create config structs per adapter in the config package. pass those directly to the adapters
+    - i think this will save loads of characters, by reducing the number of times a particular value must be 'mentioned'
+
+[ ] Categorize the models.go members appropriately into files (thinking models/domain.go models/dto.go)
+
+[ ] Consider moving all interfaces used by the roles into roles/interfaces.go
+    - while this is not idiomatic in go, it probably isnt a big violation and carries advantages in prompt engineering (not visible from inside the project)
+
+[ ] Look for commonalities of the various roles, potentially leading refactors that save characters/tokens and presents a cleaner, more solid architecture
+
+[ ] Evaluate wether the projects usage of pointers vs value is consistent & idiomatic (looking at you, NewLeaderAssignment and NewMemberAssignment)
+
+[ ] Evaluate main.go with regards to its imports and workings outside of the DI. What is the idiom 
+
+[ ] Move config and models to top-level packages to decouple core from adapters:
+    go-controller/src/
+    ├── config/       <-- Shared config & adapter config structs
+    ├── models/       <-- Shared domain entities & DTOs
+    ├── core/         <-- Pure business logic & interfaces (Consumer)
+    ├── adapters/     <-- Infrastructure implementations (Supplier)
+    └── main.go       <-- Wiring & initialization (Organizer)
 
 III. Immediate Goals (consider these first)
 
