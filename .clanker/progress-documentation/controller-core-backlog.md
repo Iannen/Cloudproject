@@ -22,6 +22,12 @@ III. Immediate Goals (consider these first)
 - Re-establish session, presence heartbeat, and event watchers upon session expiration or transient raft leader unavailability
 - Ensure managed non-core assignments (any but node and member per helper) are cleanly stopped before attempting session recovery
 
+[ ] Refactor MemberRole assignment reconciliation 
+    [ ] Decouple key path resolution and identity filtering from MemberRole logic
+        - Move path formatting (e.g. `NodeAssignmentsPath`, `AsgDefPath`) down into store adapters
+            - `NodeAssignmentsPath`, `AsgDefPath` can be passed to adapter constructor and stored in adapter. the caller need only pass id
+        - Encapsulate non-managed system role checks (`node-`, `member-`) in the registry
+
 IV. Idea bucket:
 
 V. Bugs:

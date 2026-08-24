@@ -9,3 +9,6 @@ Whitelisted standard library imports (* indicates that the import is under revie
 - strings
 - sync
 - time
+
+Keep core logic lean and high-signal: push formatting, data transformation, and multi-step lookups down into adapters.
+Core should deal in model objects (or primitives if clearly appropriate). Adapters accept and return domain objects.
