@@ -7,7 +7,7 @@ STORAGE="local-zfs"
 BRIDGE="vmbr0"
 
 TEMPLATE_CORES=2; TEMPLATE_MEMORY=4096; TEMPLATE_DISK=20
-VM_CORES=4; VM_MEMORY=3072; VM_DISK=100
+VM_CORES=4; VM_MEMORY=1024; VM_DISK=100
 DEFAULT_IMAGE_URL="https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
 DEFAULT_USER="user"; DEFAULT_PASS="pass"
 

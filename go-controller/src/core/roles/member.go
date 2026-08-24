@@ -96,8 +96,27 @@ func (m *MemberRole) runSession(sCtx context.Context, sess models.Session, nodeI
 			}
 			if ev.Err != nil {
 				log.Printf("[Member] Event stream error: %v", ev.Err)
+				continue
 			}
-			m.reconcile(sCtx, nodeID)
+
+			switch ev.Type {
+			case models.EventLeaderDeleted:
+				log.Println("[Member] Leader key deleted. Attempting leadership claim...")
+				if isLeader, err := m.store.ClaimLeader(sCtx, sess, config.ClusterLeaderKey, nodeID); err == nil && isLeader {
+					log.Println("[Member] Won leadership! Launching Leader Role...")
+					_ = m.registry.Start(&models.Assignment{
+						NodeID: nodeID,
+						ID:     "leader-" + nodeID,
+						Role:   "leader",
+					})
+				}
+
+			case models.EventAssignmentChange, models.EventReconcileTick:
+				m.reconcile(sCtx, nodeID)
+
+			default:
+				log.Printf("[Member] Unhandled event type: %s", ev.Type)
+			}
 		}
 	}
 }
