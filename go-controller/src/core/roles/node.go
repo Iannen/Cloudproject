@@ -7,7 +7,6 @@ import (
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"log"
-	"time"
 )
 
 type NodeRole struct {
@@ -52,7 +51,7 @@ func (n *NodeRole) handleInit(ctx context.Context, body []byte) (string, error) 
 		return "", fmt.Errorf("etcd start failed: %w", err)
 	}
 
-	if err := n.spk.WaitEndpointReady(ctx, config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil { //ouch this violates my eyes!
+	if err := n.spk.WaitEtcdReady(ctx); err != nil {
 		return "", fmt.Errorf("etcd ready check failed: %w", err)
 	}
 
@@ -78,7 +77,7 @@ func (n *NodeRole) handleAssimilate(ctx context.Context, body []byte) (string, e
 		return "", fmt.Errorf("etcd start failed: %w", err)
 	}
 
-	if err := n.spk.WaitEndpointReady(ctx, config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil { //another eye-violation omg
+	if err := n.spk.WaitEtcdReady(ctx); err != nil {
 		if ctx.Err() != nil {
 			return "", fmt.Errorf("timeout: %w", ctx.Err())
 		}
@@ -120,7 +119,7 @@ type HTTPServer interface {
 	Shutdown(ctx context.Context) error
 }
 type HealthChecker interface {
-	WaitEndpointReady(ctx context.Context, endpoint string, retries int, interval time.Duration) error
+	WaitEtcdReady(ctx context.Context) error
 }
 type FileMgr interface {
 	WriteEnvConfig(ctx context.Context, nodeID string, payload models.AssimilatePayload) error

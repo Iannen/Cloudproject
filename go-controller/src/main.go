@@ -46,6 +46,9 @@ func main() {
 		config.Timeout,
 		config.AssimilateURLPattern,
 		config.ActivateURLPattern,
+		config.EtcdEndpoint,
+		config.StartupRetries,
+		config.StartupInterval,
 	)
 	osa := adapters.NewOsAdapter(config.BootstrapDir, config.EnvFileName, config.EnvFilePerm, config.EnvTemplate)
 	ts := adapters.NewTailscaleAdapter(config.TailscaleBinary, config.TailscaleIPEnv)

@@ -25,28 +25,6 @@ II. Medium term goals (investigatory)
 
 III. Immediate Goals (consider these first)
 
-[x] Normalize reconcile loop channel acquisition across reconciling roles
-    [x] Refactor Leader role to acquire tick events via adapter event stream
-        - Define Leader domain event types in models (e.g., LeaderEvent)
-        - Update LeaderStore interface to supply an event channel instead of instantiating time.Ticker inline
-        - Update LeaderRole.Run to process events from the supplied channel
-    [x] Refactor Recruiter role to acquire tick events via adapter event stream
-        - Define Recruiter domain event types in models (e.g., RecruiterEvent)
-        - Update ClusterMgr interface to supply an event channel instead of instantiating time.Ticker inline
-        - Update Recruiter.Run to process events from the supplied channel
-
-[ ] Eliminate core 'time' imports in accordance with core doctrine
-    [x] Eliminate 'time' usage in 'leader.go' by moving ID generation inside adapter boundary
-    [x] Eliminate 'time' usage in 'member.go'
-        - Update store.NewSession to handle retries internally using configured interval
-        - Update store.PutWithSession to handle retries internally and accept nodeID instead of hbKey
-        - Pass NodeHeartbeatPath configuration to store adapter on construction
-    [x] Eliminate 'time' usage in 'recruiter.go'
-        -> 'time.Sleep(2 * time.Second)' can be eliminated by letting the call to 'str.PromoteMember' handle the issue internally in a best-practices way
-    [ ] Eliminate 'time' usage in 'node.go'
-        -> healthchecker itf should not need to be passed the interval as an arg. the underlying adapter should receive it in constructor.
-    (time is permitted in config.go as it deals with types only)
-
 IV. Idea bucket:
 
 V. Bugs:

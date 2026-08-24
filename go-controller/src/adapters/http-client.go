@@ -12,24 +12,36 @@ import (
 )
 
 type HTTPClientAdapter struct {
-	client        *http.Client
-	assimilateURL string
-	activateURL   string
+	client          *http.Client
+	assimilateURL   string
+	activateURL     string
+	etcdEndpoint    string
+	startupRetries  int
+	startupInterval time.Duration
 }
 
-func NewHTTPClientAdapter(timeout time.Duration, assimilateURLPattern, activateURLPattern string) *HTTPClientAdapter {
+func NewHTTPClientAdapter(
+	timeout time.Duration,
+	assimilateURLPattern, activateURLPattern string,
+	etcdEndpoint string,
+	startupRetries int,
+	startupInterval time.Duration,
+) *HTTPClientAdapter {
 	return &HTTPClientAdapter{
 		client: &http.Client{
 			Timeout: timeout,
 		},
-		assimilateURL: assimilateURLPattern,
-		activateURL:   activateURLPattern,
+		assimilateURL:   assimilateURLPattern,
+		activateURL:     activateURLPattern,
+		etcdEndpoint:    etcdEndpoint,
+		startupRetries:  startupRetries,
+		startupInterval: startupInterval,
 	}
 }
 
-func (c *HTTPClientAdapter) WaitEndpointReady(ctx context.Context, endpoint string, retries int, interval time.Duration) error {
-	for i := 0; i < retries; i++ {
-		conn, err := net.DialTimeout("tcp", endpoint, interval)
+func (c *HTTPClientAdapter) WaitEtcdReady(ctx context.Context) error {
+	for i := 0; i < c.startupRetries; i++ {
+		conn, err := net.DialTimeout("tcp", c.etcdEndpoint, c.startupInterval)
 		if err == nil {
 			_ = conn.Close()
 			return nil
@@ -38,10 +50,10 @@ func (c *HTTPClientAdapter) WaitEndpointReady(ctx context.Context, endpoint stri
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(interval):
+		case <-time.After(c.startupInterval):
 		}
 	}
-	return fmt.Errorf("endpoint %s not ready after %d retries", endpoint, retries)
+	return fmt.Errorf("etcd endpoint %s not ready after %d retries", c.etcdEndpoint, c.startupRetries)
 }
 
 func (c *HTTPClientAdapter) Assimilate(ctx context.Context, targetIP string, payload models.AssimilatePayload) error {

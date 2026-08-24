@@ -109,3 +109,8 @@ XXIII: Decoupled Core Roles from Infrastructure Configuration Parameters
 XXIV: Encapsulated Cluster Store Configuration in Adapter Construction
     - Refactored Store adapter to accept session TTL, retry timings, and leader election key paths upon initialization in main.go.
     - Updated ParticipantStore interface and MemberRole calls to rely on encapsulated Store configuration rather than passing config fields per method call.
+
+XXV: Refactored Reconcile Loop Subscriptions and Purged Core Time Dependencies
+    - Refactored Leader, Recruiter, and Member roles to acquire reconciliation tick and state change triggers via event channels managed by store adapters.
+    - Decoupled internal loop timers from core roles and encapsulated retry logic, polling intervals, and time-based operations within infrastructure adapters.
+    - Achieved full compliance with core doctrine standard library import restrictions by eliminating all `time` package imports across core role implementations.
