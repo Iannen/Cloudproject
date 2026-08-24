@@ -10,6 +10,11 @@ II. Medium term goals (investigatory)
 
 [ ] Add etcd status endpoint, for easy and comprehensive diagnostics of etcd related issues
 
+[ ] Implement automated dead etcd member pruning in TS Manager (Recruiter)
+    [ ] Detect offline/unresponsive nodes during TS Manager reconciliation cycles
+    [ ] Evict unreachable members via etcd API prior to adding new nodes
+        - Resolves etcd "unhealthy cluster" blocks on AddLearner when members are down
+
 III. Immediate Goals (consider these first)
 
 [x] Fix session lease expiration termination in MemberRole

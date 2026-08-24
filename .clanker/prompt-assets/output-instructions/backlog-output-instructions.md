@@ -1,8 +1,10 @@
-return items in a copyable box on below format
+Return items inside a plain text code block (` ```text `)
 
-[ ] Appropriately discriptive header sentence 
-    [ ] Appropriately discriptive sub task header sentence 
+Format:
+
+[ ] Appropriately descriptive header sentence 
+    [ ] Appropriately descriptive sub task header sentence 
         - optional bullet 1
-    [ ] Appropriately discriptive sub task header sentence 
+    [ ] Appropriately descriptive sub task header sentence 
         - optional bullet 1
         - optional bullet 2

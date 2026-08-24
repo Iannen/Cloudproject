@@ -1,1 +1,1 @@
-- lets plan new backlog items
+review current bl items, or plan new ones per user intent
