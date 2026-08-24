@@ -7,7 +7,6 @@ import (
 	"go-controller/src/core/models"
 	"log"
 	"strings"
-	"time"
 )
 
 type Recruiter struct {
@@ -117,8 +116,6 @@ func (t *Recruiter) recruit(ctx context.Context, p *models.TSPeer) error {
 	if err := t.http.Assimilate(ctx, ip, payload); err != nil {
 		return fmt.Errorf("[TSMgr] host=%s step=assimilate_rpc: %w", p.HostName, err)
 	}
-
-	time.Sleep(2 * time.Second)
 
 	if err := t.str.PromoteMember(ctx, lid); err != nil {
 		return fmt.Errorf("[TSMgr] host=%s step=promote: %w", p.HostName, err)

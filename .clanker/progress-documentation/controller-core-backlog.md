@@ -41,10 +41,10 @@ III. Immediate Goals (consider these first)
         - Update store.NewSession to handle retries internally using configured interval
         - Update store.PutWithSession to handle retries internally and accept nodeID instead of hbKey
         - Pass NodeHeartbeatPath configuration to store adapter on construction
+    [x] Eliminate 'time' usage in 'recruiter.go'
+        -> 'time.Sleep(2 * time.Second)' can be eliminated by letting the call to 'str.PromoteMember' handle the issue internally in a best-practices way
     [ ] Eliminate 'time' usage in 'node.go'
         -> healthchecker itf should not need to be passed the interval as an arg. the underlying adapter should receive it in constructor.
-    [ ] Eliminate 'time' usage in 'recruiter.go'
-        -> 'time.Sleep(2 * time.Second)' can be eliminated by letting the call to 'str.PromoteMember' handle the issue internally in a best-practices way
     (time is permitted in config.go as it deals with types only)
 
 IV. Idea bucket:

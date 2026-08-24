@@ -406,6 +406,11 @@ func (s *Store) AddLearner(ctx context.Context, peerURL string) (*models.MemberI
 }
 
 func (s *Store) PromoteMember(ctx context.Context, id uint64) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(s.retryInterval):
+	}
 	_, err := s.cli.MemberPromote(ctx, id)
 	return err
 }
