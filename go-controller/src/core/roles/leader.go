@@ -31,7 +31,7 @@ func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment) {
 }
 
 func (l *LeaderRole) reconcile(ctx context.Context) error {
-	nodes, err := l.store.GetActiveNodeIDs(ctx, config.PrefixHeartbeats)
+	nodes, err := l.store.GetActiveNodeIDs(ctx)
 	if err != nil {
 		return fmt.Errorf("[Leader] active node lookup failed: %w", err)
 	}
@@ -44,7 +44,7 @@ func (l *LeaderRole) reconcile(ctx context.Context) error {
 		active[n] = true
 	}
 
-	asgs, err := l.store.GetAllAssignments(ctx, config.PrefixDefs)
+	asgs, err := l.store.GetAllAssignments(ctx)
 	if err != nil {
 		return fmt.Errorf("[Leader] assignment lookup failed: %w", err)
 	}
@@ -66,7 +66,8 @@ func (l *LeaderRole) reconcile(ctx context.Context) error {
 			}
 			id := fmt.Sprintf("%s-%s-%d", spec.Name, node, time.Now().UnixNano()%10000)
 
-			if err := l.store.CreateAssignment(ctx, config.AsgDefPath(id), config.NodeAssignmentsPath(node), models.Assignment{ID: id, NodeID: node, Role: spec.Name}); err != nil {
+			asg := models.Assignment{ID: id, NodeID: node, Role: spec.Name}
+			if err := l.store.CreateAssignment(ctx, asg); err != nil {
 				log.Printf("[Leader] assign failed role=%s node=%s: %v", spec.Name, node, err)
 			} else {
 				log.Printf("[Leader] assigned id=%s node=%s", id, node)
@@ -78,9 +79,9 @@ func (l *LeaderRole) reconcile(ctx context.Context) error {
 }
 
 type AssignmentStore interface {
-	GetActiveNodeIDs(ctx context.Context, prefix string) ([]string, error)
-	GetAllAssignments(ctx context.Context, prefix string) ([]models.Assignment, error)
-	CreateAssignment(ctx context.Context, asgDefPath, nodeAsgPath string, a models.Assignment) error
+	GetActiveNodeIDs(ctx context.Context) ([]string, error)
+	GetAllAssignments(ctx context.Context) ([]models.Assignment, error)
+	CreateAssignment(ctx context.Context, a models.Assignment) error
 }
 
 func (l *LeaderRole) pickNode(nodes []string, existing []models.Assignment) string {

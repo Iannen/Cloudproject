@@ -29,6 +29,8 @@ func main() {
 		config.ClusterLeaderKey,
 		config.ReconcileInterval,
 		config.WatchReconnectDelay,
+		config.PrefixHeartbeats,
+		config.PrefixDefs,
 		config.NodeAssignmentsPath,
 		config.AsgDefPath,
 	)

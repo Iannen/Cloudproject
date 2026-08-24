@@ -29,6 +29,8 @@ type Store struct {
 	leaderKey           string
 	reconcileInterval   time.Duration
 	watchReconnectDelay time.Duration
+	prefixHeartbeats    string
+	prefixDefs          string
 	nodeAssignmentsPath func(string) string
 	asgDefPath          func(string) string
 }
@@ -36,6 +38,7 @@ type Store struct {
 func NewStore(
 	leaderKey string,
 	reconcileInterval, watchReconnectDelay time.Duration,
+	prefixHeartbeats, prefixDefs string,
 	nodeAssignmentsPath func(string) string,
 	asgDefPath func(string) string,
 ) *Store {
@@ -43,6 +46,8 @@ func NewStore(
 		leaderKey:           leaderKey,
 		reconcileInterval:   reconcileInterval,
 		watchReconnectDelay: watchReconnectDelay,
+		prefixHeartbeats:    prefixHeartbeats,
+		prefixDefs:          prefixDefs,
 		nodeAssignmentsPath: nodeAssignmentsPath,
 		asgDefPath:          asgDefPath,
 	}
@@ -78,13 +83,16 @@ func (s *Store) Connect(ctx context.Context, endpoint string, timeout, interval 
 	return fmt.Errorf("etcd connection failed after %d retries: %w", retries, lastErr)
 }
 
-func (s *Store) CreateAssignment(ctx context.Context, asgDefPath, nodeAsgPath string, a models.Assignment) error {
+func (s *Store) CreateAssignment(ctx context.Context, a models.Assignment) error {
+	asgDefPath := s.asgDefPath(a.ID)
+	nodeAsgPath := s.nodeAssignmentsPath(a.NodeID)
+
 	b, err := json.Marshal(a)
 	if err != nil {
 		return fmt.Errorf("marshal asg: %w", err)
 	}
 
-	ids, _, err := s.NodeAssignments(ctx, nodeAsgPath)
+	ids, _, err := s.NodeAssignments(ctx, a.NodeID)
 	if err != nil {
 		return fmt.Errorf("get node asgs: %w", err)
 	}
@@ -294,22 +302,22 @@ func (s *Store) watchAssignmentLoop(ctx context.Context, nodeAsgPath string, rev
 	}
 }
 
-func (s *Store) GetActiveNodeIDs(ctx context.Context, prefix string) ([]string, error) {
-	resp, err := s.cli.Get(ctx, prefix, clientv3.WithPrefix())
+func (s *Store) GetActiveNodeIDs(ctx context.Context) ([]string, error) {
+	resp, err := s.cli.Get(ctx, s.prefixHeartbeats, clientv3.WithPrefix())
 	if err != nil {
 		return nil, err
 	}
 	var ids []string
 	for _, kv := range resp.Kvs {
-		if id := string(kv.Key[len(prefix):]); id != "" {
+		if id := string(kv.Key[len(s.prefixHeartbeats):]); id != "" {
 			ids = append(ids, id)
 		}
 	}
 	return ids, nil
 }
 
-func (s *Store) GetAllAssignments(ctx context.Context, prefix string) ([]models.Assignment, error) {
-	resp, err := s.cli.Get(ctx, prefix, clientv3.WithPrefix())
+func (s *Store) GetAllAssignments(ctx context.Context) ([]models.Assignment, error) {
+	resp, err := s.cli.Get(ctx, s.prefixDefs, clientv3.WithPrefix())
 	if err != nil {
 		return nil, err
 	}

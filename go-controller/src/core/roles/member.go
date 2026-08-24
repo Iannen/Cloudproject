@@ -17,7 +17,7 @@ type MemberRole struct {
 type ParticipantStore interface {
 	NodeAssignments(ctx context.Context, nodeID string) ([]string, int64, error)
 	AssignmentDef(ctx context.Context, assignmentID string) (*models.Assignment, error)
-	CreateAssignment(ctx context.Context, asgDefPath, nodeAsgPath string, a models.Assignment) error
+	CreateAssignment(ctx context.Context, a models.Assignment) error
 	NewSession(ctx context.Context, ttl int64, retries int, interval time.Duration) (models.Session, error)
 	PutWithSession(ctx context.Context, sess models.Session, key string, value string) error
 	ClaimLeader(ctx context.Context, sess models.Session, leaderKey, nodeID string) (bool, error)
@@ -135,7 +135,7 @@ func (m *MemberRole) tryClaimLeadership(ctx context.Context, sess models.Session
 	}
 	log.Println("[Member] Won leadership! Launching Leader Role...")
 	asg := NewLeaderAssignment(nodeID)
-	if err := m.store.CreateAssignment(ctx, config.AsgDefPath(asg.ID), config.NodeAssignmentsPath(nodeID), asg); err != nil {
+	if err := m.store.CreateAssignment(ctx, asg); err != nil {
 		log.Printf("[Member] Failed to write leader assignment definition: %v", err)
 	}
 }

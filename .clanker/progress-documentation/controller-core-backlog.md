@@ -30,6 +30,13 @@ III. Immediate Goals (consider these first)
         - Updated `Registry.ActiveAssignments()` to exclude internal system assignments (`node-` and `member-` prefixes) so callers only see managed workloads
         - Added `Registry.StopManagedAssignments()` method to `RoleMgr` and `Registry` and delegated `MemberRole.stopManagedAssignments()` directly to it
 
+[x] Refactor Store adapter and LeaderRole to fully encapsulate key path resolution
+    [x] Update Store adapter to accept heartbeat and definition prefixes in constructor and encapsulate path formatting
+        - Pass `config.PrefixHeartbeats` and `config.PrefixDefs` into `adapters.NewStore` in `main.go`
+        - Update `Store` implementation to handle key prefixing internally for `GetActiveNodeIDs` and `GetAllAssignments`
+    [x] Align LeaderRole to operate exclusively on logical domain entities and IDs
+        - Update `AssignmentStore` interface methods to remove key path and prefix parameters (`GetActiveNodeIDs`, `GetAllAssignments`, `CreateAssignment`)
+        - Remove direct references to `config.PrefixHeartbeats`, `config.PrefixDefs`, `config.AsgDefPath`, and `config.NodeAssignmentsPath` from `LeaderRole.reconcile`
 
 IV. Idea bucket:
 
