@@ -9,13 +9,17 @@ import (
 )
 
 type HTTPServerAdapter struct {
-	mux    *http.ServeMux
-	server *http.Server
+	mux           *http.ServeMux
+	server        *http.Server
+	addr          string
+	clientTimeout time.Duration
 }
 
-func NewHTTPServerAdapter() *HTTPServerAdapter {
+func NewHTTPServerAdapter(addr string, clientTimeout time.Duration) *HTTPServerAdapter {
 	return &HTTPServerAdapter{
-		mux: http.NewServeMux(),
+		mux:           http.NewServeMux(),
+		addr:          addr,
+		clientTimeout: clientTimeout,
 	}
 }
 
@@ -61,13 +65,13 @@ func (s *HTTPServerAdapter) handleDomainRequest(w http.ResponseWriter, r *http.R
 	_, _ = w.Write([]byte(resp))
 }
 
-func (s *HTTPServerAdapter) Start(addr string, clientTimeout time.Duration) <-chan error {
+func (s *HTTPServerAdapter) Start() <-chan error {
 	errCh := make(chan error, 1)
 	s.server = &http.Server{
-		Addr:         addr,
+		Addr:         s.addr,
 		Handler:      s.mux,
-		ReadTimeout:  clientTimeout,
-		WriteTimeout: clientTimeout,
+		ReadTimeout:  s.clientTimeout,
+		WriteTimeout: s.clientTimeout,
 	}
 
 	go func() {

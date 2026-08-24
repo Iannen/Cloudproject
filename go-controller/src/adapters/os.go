@@ -10,21 +10,23 @@ import (
 )
 
 type OsAdapter struct {
-	envFileName string
-	filePerms   fs.FileMode
-	envTemplate string
+	bootstrapDir string
+	envFileName  string
+	filePerms    fs.FileMode
+	envTemplate  string
 }
 
-func NewOsAdapter(envFileName string, filePerms fs.FileMode, envTemplate string) *OsAdapter {
+func NewOsAdapter(bootstrapDir string, envFileName string, filePerms fs.FileMode, envTemplate string) *OsAdapter {
 	return &OsAdapter{
-		envFileName: envFileName,
-		filePerms:   filePerms,
-		envTemplate: envTemplate,
+		bootstrapDir: bootstrapDir,
+		envFileName:  envFileName,
+		filePerms:    filePerms,
+		envTemplate:  envTemplate,
 	}
 }
 
-func (b *OsAdapter) WriteEnvConfig(ctx context.Context, id string, bootstrapDir string, p models.AssimilatePayload) error {
+func (b *OsAdapter) WriteEnvConfig(ctx context.Context, id string, p models.AssimilatePayload) error {
 	env := fmt.Sprintf(b.envTemplate, id, p.AssignedIP, id, p.EtcdInitialCluster)
 
-	return os.WriteFile(filepath.Join(bootstrapDir, b.envFileName), []byte(env), b.filePerms)
+	return os.WriteFile(filepath.Join(b.bootstrapDir, b.envFileName), []byte(env), b.filePerms)
 }

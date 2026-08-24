@@ -2,7 +2,6 @@ package roles
 
 import (
 	"context"
-	"time"
 
 	"go-controller/src/core/models"
 )
@@ -21,5 +20,5 @@ type StoreAdapter interface {
 	AssignmentStore
 	ParticipantStore
 	ClusterMgr
-	Connect(ctx context.Context, endpoint string, timeout, interval time.Duration, retries int) error
+	Connect(ctx context.Context) error
 }

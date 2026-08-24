@@ -3,6 +3,7 @@ package roles
 import (
 	"context"
 	"errors"
+
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"log"
@@ -56,12 +57,12 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(config.RetryInterval):
+			case <-time.After(config.RetryInterval): //permitted config usage
 				continue
 			}
 		}
 
-		hbKey := config.NodeHeartbeatPath(nodeID)
+		hbKey := config.NodeHeartbeatPath(nodeID) //permitted config usage
 		if err := m.store.PutWithSession(ctx, sess, hbKey, "alive"); err != nil {
 			log.Printf("[Member] Failed to register heartbeat presence: %v", err)
 			_ = sess.Close()
@@ -69,7 +70,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(config.RetryInterval):
+			case <-time.After(config.RetryInterval): //permitted
 				continue
 			}
 		}

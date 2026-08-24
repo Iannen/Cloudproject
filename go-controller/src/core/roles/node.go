@@ -19,8 +19,8 @@ type NodeRole struct {
 }
 
 func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) {
-	log.Printf("[NodeRole] Starting server on port %s for node %s", config.HTTPPort, a.NodeID)
-	errCh := n.cms.Start(config.HTTPPort, config.Timeout)
+	log.Printf("[NodeRole] Starting server for node %s", a.NodeID)
+	errCh := n.cms.Start()
 
 	for {
 		select {
@@ -30,7 +30,7 @@ func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) {
 			}
 		case <-ctx.Done():
 			log.Printf("[NodeRole] Shutting down HTTP listener for node %s", a.NodeID)
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), config.Timeout) //this seems legitimate, for now at least
 			defer cancel()
 
 			if err := n.cms.Shutdown(shutdownCtx); err != nil {
@@ -42,17 +42,17 @@ func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) {
 }
 
 func (n *NodeRole) handleInit(ctx context.Context, body []byte) (string, error) {
-	id := config.NodeID()
+	id := config.NodeID() //lets us not consider the .NodeId() part of things for now, although i recongnize its a smell
 	if n.reg.IsActive("member-" + id) {
 		return fmt.Sprintf("Node %s already initialized.\n", id), nil
 	}
 
-	_ = n.dcr.ResetEtcd(ctx, config.BootstrapDir)
-	if err := n.dcr.StartEtcd(ctx, config.BootstrapDir); err != nil {
+	_ = n.dcr.ResetEtcd(ctx)
+	if err := n.dcr.StartEtcd(ctx); err != nil {
 		return "", fmt.Errorf("etcd start failed: %w", err)
 	}
 
-	if err := n.spk.WaitEndpointReady(ctx, config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil {
+	if err := n.spk.WaitEndpointReady(ctx, config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil { //i think the adapter can receive all 3 in constructor. then method can be renamed to something that says we're probing etcd readiness
 		return "", fmt.Errorf("etcd ready check failed: %w", err)
 	}
 
@@ -69,16 +69,16 @@ func (n *NodeRole) handleAssimilate(ctx context.Context, body []byte) (string, e
 		return "", fmt.Errorf("invalid payload: %w", err)
 	}
 
-	if err := n.osa.WriteEnvConfig(ctx, config.NodeID(), config.BootstrapDir, p); err != nil {
+	if err := n.osa.WriteEnvConfig(ctx, config.NodeID(), p); err != nil { //bootstrap dir via consturctor to osa, nodeid exempt for now
 		return "", fmt.Errorf("config write failed: %w", err)
 	}
 
-	_ = n.dcr.ResetEtcd(ctx, config.BootstrapDir)
-	if err := n.dcr.StartEtcd(ctx, config.BootstrapDir); err != nil {
+	_ = n.dcr.ResetEtcd(ctx)
+	if err := n.dcr.StartEtcd(ctx); err != nil {
 		return "", fmt.Errorf("etcd start failed: %w", err)
 	}
 
-	if err := n.spk.WaitEndpointReady(ctx, config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil {
+	if err := n.spk.WaitEndpointReady(ctx, config.EtcdEndpoint, config.StartupRetries, config.StartupInterval); err != nil { //all 3 config args -> to constructor
 		if ctx.Err() != nil {
 			return "", fmt.Errorf("timeout: %w", ctx.Err())
 		}
@@ -91,7 +91,7 @@ func (n *NodeRole) handleActivate(ctx context.Context, body []byte) (string, err
 	if err := n.activateMember(ctx); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("Node %s activated.\n", config.NodeID()), nil
+	return fmt.Sprintf("Node %s activated.\n", config.NodeID()), nil //nodeid exempt
 }
 
 func (n *NodeRole) handleGetLogs(ctx context.Context, body []byte) (string, error) {
@@ -110,25 +110,25 @@ func (n *NodeRole) activateMember(_ context.Context) error {
 	if err := n.InitializeStore(); err != nil {
 		return fmt.Errorf("etcd connect failed: %w", err)
 	}
-	return n.reg.Start(NewMemberAssignment(config.NodeID()))
+	return n.reg.Start(NewMemberAssignment(config.NodeID())) //nodeid exempt
 }
 
 type HTTPServer interface {
 	RegisterGetRoute(pattern string, handler models.DomainHandler)
 	RegisterPostRoute(pattern string, handler models.DomainHandler)
-	Start(addr string, clientTimeout time.Duration) <-chan error
+	Start() <-chan error
 	Shutdown(ctx context.Context) error
 }
 type HealthChecker interface {
 	WaitEndpointReady(ctx context.Context, endpoint string, retries int, interval time.Duration) error
 }
 type FileMgr interface {
-	WriteEnvConfig(ctx context.Context, nodeID string, bootstrapDir string, payload models.AssimilatePayload) error
+	WriteEnvConfig(ctx context.Context, nodeID string, payload models.AssimilatePayload) error
 }
 
 type DockerMgr interface {
-	StartEtcd(ctx context.Context, bootstrapDir string) error
-	ResetEtcd(ctx context.Context, bootstrapDir string) error
+	StartEtcd(ctx context.Context) error
+	ResetEtcd(ctx context.Context) error
 	GetLogs(ctx context.Context, containerID string) (string, error)
 }
 

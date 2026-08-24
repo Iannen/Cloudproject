@@ -21,11 +21,16 @@ func main() {
 
 	docker := adapters.NewDockerAdapter(
 		config.DockerBinary,
+		config.BootstrapDir,
 		config.DockerComposeCmd,
 		config.DockerUpArgs,
 		config.DockerDownArgs,
 	)
 	etcd := adapters.NewStore(
+		config.EtcdEndpoint,
+		config.Timeout,
+		config.StartupInterval,
+		config.StartupRetries,
 		config.ClusterLeaderKey,
 		config.ReconcileInterval,
 		config.WatchReconnectDelay,
@@ -34,13 +39,13 @@ func main() {
 		config.NodeAssignmentsPath,
 		config.AsgDefPath,
 	)
-	httpSrv := adapters.NewHTTPServerAdapter()
+	httpSrv := adapters.NewHTTPServerAdapter(config.HTTPPort, config.Timeout)
 	httpCli := adapters.NewHTTPClientAdapter(
 		config.Timeout,
 		config.AssimilateURLPattern,
 		config.ActivateURLPattern,
 	)
-	osa := adapters.NewOsAdapter(config.EnvFileName, config.EnvFilePerm, config.EnvTemplate)
+	osa := adapters.NewOsAdapter(config.BootstrapDir, config.EnvFileName, config.EnvFilePerm, config.EnvTemplate)
 	ts := adapters.NewTailscaleAdapter(config.TailscaleBinary, config.TailscaleIPEnv)
 
 	reg := registry.NewRegistry(

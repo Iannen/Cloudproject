@@ -17,6 +17,25 @@ II. Medium term goals (investigatory)
 
 III. Immediate Goals (consider these first)
 
+[x] Decouple NodeRole and Core Interfaces from Transport, Process, and Directory Configuration Parameters
+    [x] Parameterize HTTPServerAdapter with listen address and client timeout in constructor, removing address and timeout arguments from HTTPServer.Start and log statements from NodeRole.Run
+        - Files: go-controller/src/adapters/http-server.go, go-controller/src/core/roles/node.go, go-controller/src/main.go
+    [x] Parameterize DockerAdapter with bootstrap directory in constructor, removing bootstrapDir parameters from DockerMgr interface methods (StartEtcd, ResetEtcd)
+        - Files: go-controller/src/adapters/docker.go, go-controller/src/core/roles/node.go, go-controller/src/main.go
+    [x] Parameterize OsAdapter with bootstrap directory in constructor, removing bootstrapDir parameter from FileMgr.WriteEnvConfig interface signature
+        - Files: go-controller/src/adapters/os.go, go-controller/src/core/roles/node.go, go-controller/src/main.go
+
+[ ] Rather than passing config members around, they should be passed to adapters on construction in main
+    [x] 'registry.go'
+        - the call to 'r.etcd.Connect' should only pass ctx. the other args should be passed to the adapter which implements r.etcd on its construction
+    [ ] 'member.go' 
+        -permitted config usages:
+            - all usages of 'config.NodeId()' are premitted
+            - all usages of 'config.XXX' are permitted if allowed by adjacent comment
+        - config usages to adress. all config derived args shall be passed to store adapter on its construction rather than in method call
+            - 'sess, err := m.store.NewSession(ctx, config.SessionTTL, config.StartupRetries, config.RetryInterval)'
+            - 'isLeader, err := m.store.ClaimLeader(ctx, sess, config.ClusterLeaderKey, nodeID)'
+
 IV. Idea bucket:
 
 V. Bugs:

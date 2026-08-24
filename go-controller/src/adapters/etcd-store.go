@@ -26,6 +26,10 @@ func (e *etcdSession) Close() error {
 
 type Store struct {
 	cli                 *clientv3.Client
+	endpoint            string
+	timeout             time.Duration
+	startupInterval     time.Duration
+	startupRetries      int
 	leaderKey           string
 	reconcileInterval   time.Duration
 	watchReconnectDelay time.Duration
@@ -36,6 +40,9 @@ type Store struct {
 }
 
 func NewStore(
+	endpoint string,
+	timeout, startupInterval time.Duration,
+	startupRetries int,
 	leaderKey string,
 	reconcileInterval, watchReconnectDelay time.Duration,
 	prefixHeartbeats, prefixDefs string,
@@ -43,6 +50,10 @@ func NewStore(
 	asgDefPath func(string) string,
 ) *Store {
 	return &Store{
+		endpoint:            endpoint,
+		timeout:             timeout,
+		startupInterval:     startupInterval,
+		startupRetries:      startupRetries,
 		leaderKey:           leaderKey,
 		reconcileInterval:   reconcileInterval,
 		watchReconnectDelay: watchReconnectDelay,
@@ -53,16 +64,16 @@ func NewStore(
 	}
 }
 
-func (s *Store) Connect(ctx context.Context, endpoint string, timeout, interval time.Duration, retries int) error {
+func (s *Store) Connect(ctx context.Context) error {
 	var lastErr error
-	for i := 0; i < retries; i++ {
+	for i := 0; i < s.startupRetries; i++ {
 		cli, err := clientv3.New(clientv3.Config{
-			Endpoints:   []string{endpoint},
-			DialTimeout: timeout,
+			Endpoints:   []string{s.endpoint},
+			DialTimeout: s.timeout,
 		})
 		if err == nil {
-			sCtx, cancel := context.WithTimeout(ctx, timeout)
-			_, err = cli.Status(sCtx, endpoint)
+			sCtx, cancel := context.WithTimeout(ctx, s.timeout)
+			_, err = cli.Status(sCtx, s.endpoint)
 			cancel()
 			if err == nil {
 				s.cli = cli
@@ -77,10 +88,10 @@ func (s *Store) Connect(ctx context.Context, endpoint string, timeout, interval 
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(interval):
+		case <-time.After(s.startupInterval):
 		}
 	}
-	return fmt.Errorf("etcd connection failed after %d retries: %w", retries, lastErr)
+	return fmt.Errorf("etcd connection failed after %d retries: %w", s.startupRetries, lastErr)
 }
 
 func (s *Store) CreateAssignment(ctx context.Context, a models.Assignment) error {

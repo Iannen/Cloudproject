@@ -3,7 +3,6 @@ package registry
 import (
 	"context"
 	"fmt"
-	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"go-controller/src/core/roles"
 	"strings"
@@ -51,13 +50,7 @@ func NewRegistry(
 }
 
 func (r *Registry) InitializeStore() error {
-	return r.etcd.Connect(
-		r.ctx,
-		config.EtcdEndpoint,
-		config.Timeout,
-		config.StartupInterval,
-		config.StartupRetries,
-	)
+	return r.etcd.Connect(r.ctx)
 }
 
 func (r *Registry) Start(a *models.Assignment) error {

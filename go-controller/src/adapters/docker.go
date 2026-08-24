@@ -8,35 +8,37 @@ import (
 )
 
 type DockerAdapter struct {
-	binaryPath string
-	composeCmd []string
-	upArgs     []string
-	downArgs   []string
+	binaryPath   string
+	bootstrapDir string
+	composeCmd   []string
+	upArgs       []string
+	downArgs     []string
 }
 
-func NewDockerAdapter(binaryPath string, composeCmd []string, upArgs []string, downArgs []string) *DockerAdapter {
+func NewDockerAdapter(binaryPath string, bootstrapDir string, composeCmd []string, upArgs []string, downArgs []string) *DockerAdapter {
 	return &DockerAdapter{
-		binaryPath: binaryPath,
-		composeCmd: composeCmd,
-		upArgs:     upArgs,
-		downArgs:   downArgs,
+		binaryPath:   binaryPath,
+		bootstrapDir: bootstrapDir,
+		composeCmd:   composeCmd,
+		upArgs:       upArgs,
+		downArgs:     downArgs,
 	}
 }
 
-func (d *DockerAdapter) StartEtcd(ctx context.Context, bootstrapDir string) error {
-	_, err := d.runCompose(ctx, bootstrapDir, d.upArgs...)
+func (d *DockerAdapter) StartEtcd(ctx context.Context) error {
+	_, err := d.runCompose(ctx, d.upArgs...)
 	return err
 }
 
-func (d *DockerAdapter) ResetEtcd(ctx context.Context, bootstrapDir string) error {
-	_, err := d.runCompose(ctx, bootstrapDir, d.downArgs...)
+func (d *DockerAdapter) ResetEtcd(ctx context.Context) error {
+	_, err := d.runCompose(ctx, d.downArgs...)
 	return err
 }
 
-func (d *DockerAdapter) runCompose(ctx context.Context, bootstrapDir string, args ...string) ([]byte, error) {
+func (d *DockerAdapter) runCompose(ctx context.Context, args ...string) ([]byte, error) {
 	cmdArgs := append(append([]string{}, d.composeCmd...), args...)
 	cmd := exec.CommandContext(ctx, d.binaryPath, cmdArgs...)
-	cmd.Dir = bootstrapDir
+	cmd.Dir = d.bootstrapDir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return out, fmt.Errorf("docker compose %s: %w (%s)", strings.Join(args, " "), err, out)
