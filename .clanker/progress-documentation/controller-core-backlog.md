@@ -20,11 +20,11 @@ II. Medium term goals (investigatory)
 III. Immediate Goals (consider these first)
 
 [ ] Normalize reconcile loop channel acquisition across reconciling roles
-    [ ] Refactor Leader role to acquire tick events via adapter event stream
+    [x] Refactor Leader role to acquire tick events via adapter event stream
         - Define Leader domain event types in models (e.g., LeaderEvent)
         - Update LeaderStore interface to supply an event channel instead of instantiating time.Ticker inline
         - Update LeaderRole.Run to process events from the supplied channel
-    [ ] Refactor Recruiter role to acquire tick events via adapter event stream
+    [x] Refactor Recruiter role to acquire tick events via adapter event stream
         - Define Recruiter domain event types in models (e.g., RecruiterEvent)
         - Update ClusterMgr interface to supply an event channel instead of instantiating time.Ticker inline
         - Update Recruiter.Run to process events from the supplied channel

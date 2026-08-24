@@ -232,6 +232,46 @@ func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan mode
 	return ch, nil
 }
 
+func (s *Store) SubscribeLeaderEvents(ctx context.Context) (<-chan models.LeaderEvent, error) {
+	ch := make(chan models.LeaderEvent, 10)
+	go func() {
+		tk := time.NewTicker(s.reconcileInterval)
+		defer tk.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tk.C:
+				select {
+				case ch <- models.LeaderEvent{Type: models.EventLeaderReconcileTick}:
+				default:
+				}
+			}
+		}
+	}()
+	return ch, nil
+}
+
+func (s *Store) SubscribeRecruiterEvents(ctx context.Context) (<-chan models.RecruiterEvent, error) {
+	ch := make(chan models.RecruiterEvent, 10)
+	go func() {
+		tk := time.NewTicker(s.reconcileInterval)
+		defer tk.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tk.C:
+				select {
+				case ch <- models.RecruiterEvent{Type: models.EventRecruiterReconcileTick}:
+				default:
+				}
+			}
+		}
+	}()
+	return ch, nil
+}
+
 func (s *Store) notifyEvent(ch chan<- models.MemberEvent, ev models.MemberEvent) {
 	select {
 	case ch <- ev:

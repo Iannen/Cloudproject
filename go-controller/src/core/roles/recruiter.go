@@ -17,15 +17,25 @@ type Recruiter struct {
 }
 
 func (t *Recruiter) Run(ctx context.Context, a *models.Assignment) {
-	tk := time.NewTicker(config.ReconcileInterval) //i think ticker creation belongs inside an adapter, which returns a channel to the role which runs a eventloop. member already has such a thing going on (although that channel does not include a ticker afaik)
-	defer tk.Stop()
-
 	log.Printf("[TSMgr] Started: %s on %s", a.ID, a.NodeID)
+	ch, err := t.str.SubscribeRecruiterEvents(ctx)
+	if err != nil {
+		log.Printf("[TSMgr] Failed to subscribe to recruiter events: %v", err)
+		return
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-tk.C:
+		case ev, ok := <-ch:
+			if !ok {
+				return
+			}
+			if ev.Err != nil {
+				log.Printf("[TSMgr] Event stream error: %v", ev.Err)
+				continue
+			}
 			if err := t.reconcile(ctx); err != nil {
 				log.Println(err)
 			}
@@ -141,6 +151,7 @@ type ClusterMgr interface {
 	AddLearner(ctx context.Context, peerURL string) (*models.MemberInfo, []models.MemberInfo, error)
 	PromoteMember(ctx context.Context, memberID uint64) error
 	RemoveMember(ctx context.Context, memberID uint64) error
+	SubscribeRecruiterEvents(ctx context.Context) (<-chan models.RecruiterEvent, error)
 }
 
 type TSClient interface {

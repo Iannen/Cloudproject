@@ -14,15 +14,25 @@ type LeaderRole struct {
 }
 
 func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment) {
-	tk := time.NewTicker(config.ReconcileInterval) //TODO: consider pushing the ticker creation behind an adapter
-	defer tk.Stop()
-
 	log.Printf("[Leader] Started: %s on %s", a.ID, a.NodeID)
+	ch, err := l.store.SubscribeLeaderEvents(ctx)
+	if err != nil {
+		log.Printf("[Leader] Failed to subscribe to leader events: %v", err)
+		return
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-tk.C:
+		case ev, ok := <-ch:
+			if !ok {
+				return
+			}
+			if ev.Err != nil {
+				log.Printf("[Leader] Event stream error: %v", ev.Err)
+				continue
+			}
 			if err := l.reconcile(ctx); err != nil {
 				log.Println(err)
 			}
@@ -82,6 +92,7 @@ type AssignmentStore interface {
 	GetActiveNodeIDs(ctx context.Context) ([]string, error)
 	GetAllAssignments(ctx context.Context) ([]models.Assignment, error)
 	CreateAssignment(ctx context.Context, a models.Assignment) error
+	SubscribeLeaderEvents(ctx context.Context) (<-chan models.LeaderEvent, error)
 }
 
 func (l *LeaderRole) pickNode(nodes []string, existing []models.Assignment) string {

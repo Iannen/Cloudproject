@@ -71,4 +71,26 @@ type MemberEvent struct {
 	Err  error
 }
 
+type LeaderEventType string
+
+const (
+	EventLeaderReconcileTick LeaderEventType = "RECONCILE_TICK"
+)
+
+type LeaderEvent struct {
+	Type LeaderEventType
+	Err  error
+}
+
+type RecruiterEventType string
+
+const (
+	EventRecruiterReconcileTick RecruiterEventType = "RECONCILE_TICK"
+)
+
+type RecruiterEvent struct {
+	Type RecruiterEventType
+	Err  error
+}
+
 type DomainHandler func(ctx context.Context, body []byte) (string, error)
