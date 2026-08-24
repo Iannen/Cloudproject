@@ -7,7 +7,6 @@ import (
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"log"
-	"time"
 )
 
 type MemberRole struct {
@@ -20,7 +19,7 @@ type ParticipantStore interface {
 	AssignmentDef(ctx context.Context, assignmentID string) (*models.Assignment, error)
 	CreateAssignment(ctx context.Context, a models.Assignment) error
 	NewSession(ctx context.Context) (models.Session, error)
-	PutWithSession(ctx context.Context, sess models.Session, key string, value string) error
+	PutWithSession(ctx context.Context, sess models.Session, nodeID string, value string) error
 	ClaimLeader(ctx context.Context, sess models.Session, nodeID string) (bool, error)
 	SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.MemberEvent, error)
 }
@@ -54,25 +53,20 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 		if err != nil {
 			log.Printf("[Member] Failed to establish session: %v", err)
 			m.registry.StopManagedAssignments()
-			select {
-			case <-ctx.Done():
+			if ctx.Err() != nil {
 				return
-			case <-time.After(config.RetryInterval):
-				continue
 			}
+			continue
 		}
 
-		hbKey := config.NodeHeartbeatPath(nodeID)
-		if err := m.store.PutWithSession(ctx, sess, hbKey, "alive"); err != nil {
+		if err := m.store.PutWithSession(ctx, sess, nodeID, "alive"); err != nil {
 			log.Printf("[Member] Failed to register heartbeat presence: %v", err)
 			_ = sess.Close()
 			m.registry.StopManagedAssignments()
-			select {
-			case <-ctx.Done():
+			if ctx.Err() != nil {
 				return
-			case <-time.After(config.RetryInterval):
-				continue
 			}
+			continue
 		}
 
 		if err := m.runSession(ctx, sess, nodeID); err != nil {

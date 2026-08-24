@@ -162,11 +162,12 @@ func (s *Store) NewSession(ctx context.Context) (models.Session, error) {
 	return nil, err
 }
 
-func (s *Store) PutWithSession(ctx context.Context, sess models.Session, key, val string) error {
+func (s *Store) PutWithSession(ctx context.Context, sess models.Session, nodeID, val string) error {
 	eSess, ok := sess.(*etcdSession)
 	if !ok {
 		return fmt.Errorf("invalid session type provided")
 	}
+	key := s.prefixHeartbeats + nodeID
 	_, err := s.cli.Put(ctx, key, val, clientv3.WithLease(eSess.sess.Lease()))
 	return err
 }

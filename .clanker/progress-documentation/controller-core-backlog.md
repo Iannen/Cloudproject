@@ -37,7 +37,7 @@ III. Immediate Goals (consider these first)
 
 [ ] Eliminate core 'time' imports in accordance with core doctrine
     [x] Eliminate 'time' usage in 'leader.go' by moving ID generation inside adapter boundary
-    [ ] Eliminate 'time' usage in 'member.go'
+    [x] Eliminate 'time' usage in 'member.go'
         - Update store.NewSession to handle retries internally using configured interval
         - Update store.PutWithSession to handle retries internally and accept nodeID instead of hbKey
         - Pass NodeHeartbeatPath configuration to store adapter on construction
