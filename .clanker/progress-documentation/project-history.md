@@ -93,3 +93,11 @@ XX: Refactored Leadership Claim Reconciliation, Event Handling, and Race Log Nor
     - Simplified leadership race logging in tryClaimLeadership to report only the final outcome.
     - Normalized LeaderRole lifecycle management so MemberRole relies solely on etcd watch events and assignment state reconciliation to launch or teardown LeaderRole.
     - Handled LEADER_DELETED watch events in MemberRole event loop via typed event handling to trigger automatic leadership claim attempts upon leader key deletion.
+
+XXI: Refactored MemberRole Session Recovery and Assignment Reconciliation
+    - Refactored MemberRole.Run to wrap session creation, presence heartbeats, and runSession in an outer retry loop, ensuring managed non-core assignments are cleanly stopped prior to session recovery.
+    - Decoupled key path resolution and identity filtering from MemberRole by pushing system role filtering (`node-`, `member-`) into `Registry.ActiveAssignments` and delegating managed workload teardown to `Registry.StopManagedAssignments`.
+
+XXII: Encapsulated Key Path Resolution and HTTP RPC Configuration
+    - Encapsulated key path prefixes and formatting within the `Store` adapter constructor, removing direct configuration-derived path references (`PrefixHeartbeats`, `PrefixDefs`, `AsgDefPath`, `NodeAssignmentsPath`) from `LeaderRole.reconcile`.
+    - Simplified `RpcClient` interface and `Recruiter` by encapsulating HTTP URL pattern formatting and timeout configuration directly inside the HTTP client adapter constructor.

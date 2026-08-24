@@ -33,6 +33,10 @@ func (t *Recruiter) Run(ctx context.Context, a *models.Assignment) {
 	}
 }
 
+func (t *Recruiter) peerURL(ip string) string {
+	return fmt.Sprintf("http://%s:2380", ip)
+}
+
 func (t *Recruiter) reconcile(ctx context.Context) error {
 	seenIPs, err := t.str.GetClusterPeerURLs(ctx)
 	if err != nil {
@@ -49,7 +53,7 @@ func (t *Recruiter) reconcile(ctx context.Context) error {
 			continue
 		}
 
-		peerURL := fmt.Sprintf("http://%s:%d", p.TailscaleIPs[0], config.EtcdPeerPort)
+		peerURL := t.peerURL(p.TailscaleIPs[0])
 		if seenIPs[peerURL] {
 			continue
 		}
@@ -70,7 +74,7 @@ func (t *Recruiter) recruit(ctx context.Context, p *models.TSPeer) error {
 		return fmt.Errorf("[TSMgr] host=%s step=get_local_ip: %w", p.HostName, err)
 	}
 
-	l, mems, err := t.str.AddLearner(ctx, fmt.Sprintf("http://%s:%d", ip, config.EtcdPeerPort))
+	l, mems, err := t.str.AddLearner(ctx, t.peerURL(ip))
 	if err != nil {
 		return fmt.Errorf("[TSMgr] host=%s step=add_learner: %w", p.HostName, err)
 	}
@@ -95,7 +99,7 @@ func (t *Recruiter) recruit(ctx context.Context, p *models.TSPeer) error {
 
 	payload := models.AssimilatePayload{
 		LeaderName:         config.NodeID(),
-		LeaderPeerURL:      fmt.Sprintf("http://%s:%d", locIP, config.EtcdPeerPort),
+		LeaderPeerURL:      t.peerURL(locIP),
 		EtcdInitialCluster: strings.Join(toks, ","),
 		AssignedIP:         ip,
 	}

@@ -17,27 +17,6 @@ II. Medium term goals (investigatory)
 
 III. Immediate Goals (consider these first)
 
-[x] Fix session lease expiration termination in MemberRole
-- Refactor MemberRole.Run to wrap session creation and runSession in an outer retry loop
-- Re-establish session, presence heartbeat, and event watchers upon session expiration or transient raft leader unavailability
-- Ensure managed non-core assignments (any but node and member per helper) are cleanly stopped before attempting session recovery
-
-[x] Refactor MemberRole assignment reconciliation 
-    [x] Decouple key path resolution and identity filtering from MemberRole logic
-        - Injected `NodeAssignmentsPath` and `AsgDefPath` resolvers into `adapters.Store` constructor, updating `NodeAssignments`, `AssignmentDef`, and `SubscribeEvents` to accept logical IDs (`nodeID`, `assignmentID`) rather than formatted paths
-        - Removed explicit path formatting calls from `MemberRole.reconcile`
-    [x] Push unmanaged system role filtering (`node-`, `member-`) behind the Registry boundary
-        - Updated `Registry.ActiveAssignments()` to exclude internal system assignments (`node-` and `member-` prefixes) so callers only see managed workloads
-        - Added `Registry.StopManagedAssignments()` method to `RoleMgr` and `Registry` and delegated `MemberRole.stopManagedAssignments()` directly to it
-
-[x] Refactor Store adapter and LeaderRole to fully encapsulate key path resolution
-    [x] Update Store adapter to accept heartbeat and definition prefixes in constructor and encapsulate path formatting
-        - Pass `config.PrefixHeartbeats` and `config.PrefixDefs` into `adapters.NewStore` in `main.go`
-        - Update `Store` implementation to handle key prefixing internally for `GetActiveNodeIDs` and `GetAllAssignments`
-    [x] Align LeaderRole to operate exclusively on logical domain entities and IDs
-        - Update `AssignmentStore` interface methods to remove key path and prefix parameters (`GetActiveNodeIDs`, `GetAllAssignments`, `CreateAssignment`)
-        - Remove direct references to `config.PrefixHeartbeats`, `config.PrefixDefs`, `config.AsgDefPath`, and `config.NodeAssignmentsPath` from `LeaderRole.reconcile`
-
 IV. Idea bucket:
 
 V. Bugs:
