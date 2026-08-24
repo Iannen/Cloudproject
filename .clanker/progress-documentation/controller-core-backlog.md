@@ -12,7 +12,7 @@ II. Medium term goals (investigatory)
 
 III. Immediate Goals (consider these first)
 
-[ ] Fix session lease expiration termination in MemberRole
+[x] Fix session lease expiration termination in MemberRole
 - Refactor MemberRole.Run to wrap session creation and runSession in an outer retry loop
 - Re-establish session, presence heartbeat, and event watchers upon session expiration or transient raft leader unavailability
 - Ensure managed non-core assignments (any but node and member per helper) are cleanly stopped before attempting session recovery
@@ -20,14 +20,15 @@ III. Immediate Goals (consider these first)
 IV. Idea bucket:
 
 V. Bugs:
-    [ ] 3 node experiment to demonstrate bug
-        1. three nodes boot, one is chosen as leader via initialize endpoint. it assimilates the other 2 nodes, yielding below status
-+----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+79 endpoint status -w table
-|          ENDPOINT          |        ID        | VERSION | DB SIZE | IS LEADER | IS LEARNER | RAFT TERM | RAFT INDEX | RAFT APPLIED INDEX | ERRORS |
-+----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
-| http://100.119.155.14:2379 | e067c70e92196295 |  3.5.23 |   20 kB |      true |      false |         2 |         25 |                 25 |        |
-| http://100.105.185.34:2379 | ddbd1eee81e0dba7 |  3.5.23 |   20 kB |     false |      false |         2 |         25 |                 25 |        |
-|   http://100.65.82.53:2379 | 7558006d1a23d552 |  3.5.23 |   20 kB |     false |      false |         2 |         25 |                 25 |        |
-+----------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
-        2. leadernode 100.119.155.14 is 'qm stopped'
-        3. Root cause: when etcd Raft leader dies, remaining nodes fail to keepalive/renew their etcd session TTL during Raft election window, causing `sess.Done()` to fire ('Session terminated: session lease expired') before leadership claim can process.
+    [ ] Unhealthy cluster after vm node disabled
+        - 3 nodes in an operational cluster:
+            a. disable leader any of the 3 (qm stop xxx)
+                -> other 2 race for leader, if required. this works
+                -> they appear to continue or resume normal operations, as expected.
+            b. add a fourth node to the cluster, excepting it to be assimilated
+                -> the node appears to correctly start and is awaiting assimilation (by its logs)
+                -> the ts manager of the cluster attempts to recruit the new node, but it just loops with etcd error, like below
+                    {"level":"warn","ts":"2026-08-24T14:27:52.101759Z","logger":"etcd-client","caller":"v3@v3.5.23/retry_interceptor.go:63","msg":"retrying of unary invoker failed","target":"etcd-endpoints://0xc0002ab860/localhost:2379","attempt":0,"error":"rpc error: code = Unavailable desc = etcdserver: unhealthy cluster"}
+                    2026/08/24 14:27:52 [TSMgr] host=kaffcloud-home-103 step=add_learner: add learner http://100.124.164.71:2380: etcdserver: unhealthy cluster
+        I would have though a cluster with 2/3 nodes responding was healthy, and able to take on new members.
+        

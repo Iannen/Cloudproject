@@ -44,25 +44,43 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 	nodeID := config.NodeID()
 	log.Printf("[Member] Member role starting setup for node %s", nodeID)
 
-	sess, err := m.store.NewSession(ctx, config.SessionTTL, config.StartupRetries, config.RetryInterval)
-	if err != nil {
-		log.Printf("[Member] Failed to establish initial session: %v", err)
-		return
-	}
+	for {
+		if ctx.Err() != nil {
+			log.Printf("[Member] Stopping member role loop: %v", ctx.Err())
+			return
+		}
 
-	defer func() {
+		sess, err := m.store.NewSession(ctx, config.SessionTTL, config.StartupRetries, config.RetryInterval)
+		if err != nil {
+			log.Printf("[Member] Failed to establish session: %v", err)
+			m.stopManagedAssignments()
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(config.RetryInterval):
+				continue
+			}
+		}
+
+		hbKey := config.NodeHeartbeatPath(nodeID)
+		if err := m.store.PutWithSession(ctx, sess, hbKey, "alive"); err != nil {
+			log.Printf("[Member] Failed to register heartbeat presence: %v", err)
+			_ = sess.Close()
+			m.stopManagedAssignments()
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(config.RetryInterval):
+				continue
+			}
+		}
+
+		if err := m.runSession(ctx, sess, nodeID); err != nil {
+			log.Printf("[Member] Session terminated: %v", err)
+		}
+
 		_ = sess.Close()
 		m.stopManagedAssignments()
-	}()
-
-	hbKey := config.NodeHeartbeatPath(nodeID)
-	if err := m.store.PutWithSession(ctx, sess, hbKey, "alive"); err != nil {
-		log.Printf("[Member] Failed to register heartbeat presence: %v", err)
-		return
-	}
-
-	if err := m.runSession(ctx, sess, nodeID); err != nil {
-		log.Printf("[Member] Session terminated: %v", err)
 	}
 }
 
