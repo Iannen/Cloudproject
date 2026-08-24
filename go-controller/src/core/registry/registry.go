@@ -160,14 +160,13 @@ type AssignmentRuntime struct {
 	AssignmentID string
 	Definition   *models.Assignment
 	CancelFunc   context.CancelFunc
-	DoneChan     chan struct{}
+	wg           sync.WaitGroup
 }
 
 func NewAssignmentRuntime(asg *models.Assignment) *AssignmentRuntime {
 	return &AssignmentRuntime{
 		AssignmentID: asg.ID,
 		Definition:   asg,
-		DoneChan:     make(chan struct{}),
 	}
 }
 
@@ -178,8 +177,9 @@ func (r *AssignmentRuntime) Start(
 	ctx, cancel := context.WithCancel(parentCtx)
 	r.CancelFunc = cancel
 
+	r.wg.Add(1)
 	go func() {
-		defer close(r.DoneChan)
+		defer r.wg.Done()
 		defer cancel()
 
 		runner.Run(ctx, r.Definition)
@@ -190,5 +190,5 @@ func (r *AssignmentRuntime) Stop() {
 	if r.CancelFunc != nil {
 		r.CancelFunc()
 	}
-	<-r.DoneChan
+	r.wg.Wait()
 }

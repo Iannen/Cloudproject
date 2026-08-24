@@ -43,3 +43,11 @@ func (d *DockerAdapter) runCompose(ctx context.Context, bootstrapDir string, arg
 	}
 	return out, nil
 }
+func (d *DockerAdapter) GetLogs(ctx context.Context, containerID string) (string, error) {
+	cmd := exec.CommandContext(ctx, d.binaryPath, "logs", containerID)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("docker logs %s failed: %w (%s)", containerID, err, out)
+	}
+	return string(out), nil
+}

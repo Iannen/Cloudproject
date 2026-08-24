@@ -20,17 +20,24 @@ type NodeRole struct {
 
 func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) {
 	log.Printf("[NodeRole] Starting server on port %s for node %s", config.HTTPPort, a.NodeID)
-	n.cms.Start(config.HTTPPort, config.Timeout)
+	errCh := n.cms.Start(config.HTTPPort, config.Timeout)
 
-	<-ctx.Done()
+	for {
+		select {
+		case err, ok := <-errCh:
+			if ok && err != nil {
+				log.Printf("[NodeRole] HTTP server error: %v", err)
+			}
+		case <-ctx.Done():
+			log.Printf("[NodeRole] Shutting down HTTP listener for node %s", a.NodeID)
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+			defer cancel()
 
-	log.Printf("[NodeRole] Shutting down HTTP listener for node %s", a.NodeID)
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), config.Timeout)
-	defer cancel()
-
-	if err := n.cms.Shutdown(shutdownCtx); err != nil {
-		log.Printf("[NodeRole] Error during HTTP shutdown: %v", err)
-		return
+			if err := n.cms.Shutdown(shutdownCtx); err != nil {
+				log.Printf("[NodeRole] Error during HTTP shutdown: %v", err)
+			}
+			return
+		}
 	}
 }
 
@@ -49,7 +56,7 @@ func (n *NodeRole) handleInit(ctx context.Context, body []byte) (string, error) 
 		return "", fmt.Errorf("etcd ready check failed: %w", err)
 	}
 
-	if err := n.activateMember(); err != nil {
+	if err := n.activateMember(ctx); err != nil {
 		return "", err
 	}
 
@@ -81,17 +88,25 @@ func (n *NodeRole) handleAssimilate(ctx context.Context, body []byte) (string, e
 }
 
 func (n *NodeRole) handleActivate(ctx context.Context, body []byte) (string, error) {
-	if err := n.activateMember(); err != nil {
+	if err := n.activateMember(ctx); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("Node %s activated.\n", config.NodeID()), nil
+}
+
+func (n *NodeRole) handleGetLogs(ctx context.Context, body []byte) (string, error) {
+	logs, err := n.dcr.GetLogs(ctx, "controller")
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch container logs: %w", err)
+	}
+	return logs, nil
 }
 
 func (n *NodeRole) InitializeStore() error {
 	return n.reg.InitializeStore()
 }
 
-func (n *NodeRole) activateMember() error {
+func (n *NodeRole) activateMember(_ context.Context) error {
 	if err := n.InitializeStore(); err != nil {
 		return fmt.Errorf("etcd connect failed: %w", err)
 	}
@@ -121,11 +136,13 @@ type FileMgr interface {
 type DockerMgr interface {
 	StartEtcd(ctx context.Context, bootstrapDir string) error
 	ResetEtcd(ctx context.Context, bootstrapDir string) error
+	GetLogs(ctx context.Context, containerID string) (string, error)
 }
 
 func NewNodeRole(reg RoleMgr, dcr DockerMgr, osa FileMgr, cms HTTPServer, spk HealthChecker) *NodeRole {
 	n := &NodeRole{reg: reg, dcr: dcr, osa: osa, cms: cms, spk: spk}
 	n.cms.RegisterGetRoute("/initialize", n.handleInit)
+	n.cms.RegisterGetRoute("/logs", n.handleGetLogs)
 	n.cms.RegisterPostRoute("/assimilate", n.handleAssimilate)
 	n.cms.RegisterPostRoute("/activate", n.handleActivate)
 	return n

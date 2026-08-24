@@ -81,3 +81,9 @@ XVIII: Decoupled Adapters from Core Config and Domain Roles
     - Added configurable constructor fields to `DockerAdapter` (`binaryPath`, `composeCmd`, `upArgs`, `downArgs`), `HTTPClientAdapter` (`assimilateURLPattern`, `activateURLPattern`), `OsAdapter` (`envFileName`, `filePerms`, `envTemplate`), `TailscaleAdapter` (`binaryPath`, `envKey`), and `Store` (`leaderKey`, `reconcileInterval`, `watchReconnectDelay`).
     - Moved `DomainHandler` definition to `models` package to allow `HTTPServerAdapter` to exclusively import `models`.
     - Updated `main.go` to construct and wire all parameterized adapters using values from `config`.
+
+XIX: Completed HTTP Container Logging, Context Propagation, and Error Channel Handling
+    - Added GetLogs method to DockerMgr interface and implemented container log retrieval handling in NodeRole via GET /logs endpoint.
+    - Updated handleInit, handleAssimilate, and handleActivate handlers in NodeRole to accept and propagate context.Context.
+    - Streamlined AssignmentRuntime execution lifecycle using sync.WaitGroup and context cancellation.
+    - Handled HTTP server lifecycle error channel returned by cms.Start in NodeRole.Run.
