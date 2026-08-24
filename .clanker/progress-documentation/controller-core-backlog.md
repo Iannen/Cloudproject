@@ -6,6 +6,9 @@ II. Medium term goals (investigatory)
 
 [ ] Add etcd status endpoint, for easy and comprehensive diagnostics of etcd related issues
 
+[ ] Improve leader race logging. it should only log the outcome of the attempt, rather than a try + success / silent fail
+    2026/08/24 12:39:00 [Member] Leader key deleted. Attempting leadership claim...
+    2026/08/24 12:39:00 [Member] Won leadership! Launching Leader Role...
 
 III. Immediate Goals (consider these first)
 
