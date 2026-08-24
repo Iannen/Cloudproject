@@ -30,6 +30,8 @@ type Store struct {
 	timeout             time.Duration
 	startupInterval     time.Duration
 	startupRetries      int
+	sessionTTL          int64
+	retryInterval       time.Duration
 	leaderKey           string
 	reconcileInterval   time.Duration
 	watchReconnectDelay time.Duration
@@ -43,6 +45,8 @@ func NewStore(
 	endpoint string,
 	timeout, startupInterval time.Duration,
 	startupRetries int,
+	sessionTTL int64,
+	retryInterval time.Duration,
 	leaderKey string,
 	reconcileInterval, watchReconnectDelay time.Duration,
 	prefixHeartbeats, prefixDefs string,
@@ -54,6 +58,8 @@ func NewStore(
 		timeout:             timeout,
 		startupInterval:     startupInterval,
 		startupRetries:      startupRetries,
+		sessionTTL:          sessionTTL,
+		retryInterval:       retryInterval,
 		leaderKey:           leaderKey,
 		reconcileInterval:   reconcileInterval,
 		watchReconnectDelay: watchReconnectDelay,
@@ -134,11 +140,11 @@ func (s *Store) CreateAssignment(ctx context.Context, a models.Assignment) error
 	return nil
 }
 
-func (s *Store) NewSession(ctx context.Context, ttl int64, retries int, interval time.Duration) (models.Session, error) {
+func (s *Store) NewSession(ctx context.Context) (models.Session, error) {
 	var err error
-	for i := 0; i < retries; i++ {
+	for i := 0; i < s.startupRetries; i++ {
 		var sess *concurrency.Session
-		sess, err = concurrency.NewSession(s.cli, concurrency.WithTTL(int(ttl)), concurrency.WithContext(ctx))
+		sess, err = concurrency.NewSession(s.cli, concurrency.WithTTL(int(s.sessionTTL)), concurrency.WithContext(ctx))
 		if err == nil {
 			return &etcdSession{sess: sess}, nil
 		}
@@ -146,7 +152,7 @@ func (s *Store) NewSession(ctx context.Context, ttl int64, retries int, interval
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(interval):
+		case <-time.After(s.retryInterval):
 		}
 	}
 	return nil, err
@@ -194,15 +200,15 @@ func (s *Store) NodeAssignments(ctx context.Context, nodeID string) ([]string, i
 	return ids, rev, nil
 }
 
-func (s *Store) ClaimLeader(ctx context.Context, sess models.Session, leaderKey, nodeID string) (bool, error) {
+func (s *Store) ClaimLeader(ctx context.Context, sess models.Session, nodeID string) (bool, error) {
 	eSess, ok := sess.(*etcdSession)
 	if !ok {
 		return false, fmt.Errorf("invalid session type provided")
 	}
 	resp, err := s.cli.Txn(ctx).
-		If(clientv3.Compare(clientv3.CreateRevision(leaderKey), "=", 0)).
-		Then(clientv3.OpPut(leaderKey, nodeID, clientv3.WithLease(eSess.sess.Lease()))).
-		Else(clientv3.OpGet(leaderKey)).
+		If(clientv3.Compare(clientv3.CreateRevision(s.leaderKey), "=", 0)).
+		Then(clientv3.OpPut(s.leaderKey, nodeID, clientv3.WithLease(eSess.sess.Lease()))).
+		Else(clientv3.OpGet(s.leaderKey)).
 		Commit()
 	if err != nil {
 		return false, fmt.Errorf("leader election txn: %w", err)

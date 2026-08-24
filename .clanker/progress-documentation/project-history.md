@@ -101,3 +101,11 @@ XXI: Refactored MemberRole Session Recovery and Assignment Reconciliation
 XXII: Encapsulated Key Path Resolution and HTTP RPC Configuration
     - Encapsulated key path prefixes and formatting within the `Store` adapter constructor, removing direct configuration-derived path references (`PrefixHeartbeats`, `PrefixDefs`, `AsgDefPath`, `NodeAssignmentsPath`) from `LeaderRole.reconcile`.
     - Simplified `RpcClient` interface and `Recruiter` by encapsulating HTTP URL pattern formatting and timeout configuration directly inside the HTTP client adapter constructor.
+
+XXIII: Decoupled Core Roles from Infrastructure Configuration Parameters
+    - Parameterized HTTPServerAdapter, DockerAdapter, and OsAdapter with transport, process, and directory parameters in constructors.
+    - Cleaned up NodeRole interface signatures by removing listen addresses, timeout values, and bootstrap directory paths from method calls.
+
+XXIV: Encapsulated Cluster Store Configuration in Adapter Construction
+    - Refactored Store adapter to accept session TTL, retry timings, and leader election key paths upon initialization in main.go.
+    - Updated ParticipantStore interface and MemberRole calls to rely on encapsulated Store configuration rather than passing config fields per method call.

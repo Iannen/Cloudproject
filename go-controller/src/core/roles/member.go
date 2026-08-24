@@ -19,9 +19,9 @@ type ParticipantStore interface {
 	NodeAssignments(ctx context.Context, nodeID string) ([]string, int64, error)
 	AssignmentDef(ctx context.Context, assignmentID string) (*models.Assignment, error)
 	CreateAssignment(ctx context.Context, a models.Assignment) error
-	NewSession(ctx context.Context, ttl int64, retries int, interval time.Duration) (models.Session, error)
+	NewSession(ctx context.Context) (models.Session, error)
 	PutWithSession(ctx context.Context, sess models.Session, key string, value string) error
-	ClaimLeader(ctx context.Context, sess models.Session, leaderKey, nodeID string) (bool, error)
+	ClaimLeader(ctx context.Context, sess models.Session, nodeID string) (bool, error)
 	SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.MemberEvent, error)
 }
 
@@ -50,7 +50,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 			return
 		}
 
-		sess, err := m.store.NewSession(ctx, config.SessionTTL, config.StartupRetries, config.RetryInterval)
+		sess, err := m.store.NewSession(ctx)
 		if err != nil {
 			log.Printf("[Member] Failed to establish session: %v", err)
 			m.registry.StopManagedAssignments()
@@ -125,7 +125,7 @@ func (m *MemberRole) runSession(sCtx context.Context, sess models.Session, nodeI
 }
 
 func (m *MemberRole) tryClaimLeadership(ctx context.Context, sess models.Session, nodeID string) {
-	isLeader, err := m.store.ClaimLeader(ctx, sess, config.ClusterLeaderKey, nodeID)
+	isLeader, err := m.store.ClaimLeader(ctx, sess, nodeID)
 	if err != nil {
 		log.Printf("[Member] Leadership claim attempt error: %v", err)
 		return

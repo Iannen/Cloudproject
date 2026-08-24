@@ -31,6 +31,8 @@ func main() {
 		config.Timeout,
 		config.StartupInterval,
 		config.StartupRetries,
+		config.SessionTTL,
+		config.RetryInterval,
 		config.ClusterLeaderKey,
 		config.ReconcileInterval,
 		config.WatchReconnectDelay,

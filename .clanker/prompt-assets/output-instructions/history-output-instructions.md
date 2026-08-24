@@ -1,4 +1,4 @@
-return new item to be appended to history doc:
+return new item(s) to be appended to history doc:
 ```
 <roman numeral>: <Descriptive header>
     - Bullet 1
