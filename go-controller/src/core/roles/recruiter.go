@@ -59,7 +59,7 @@ func (t *Recruiter) reconcile(ctx context.Context) error {
 	}
 
 	for _, p := range peers {
-		if !p.Online || len(p.TailscaleIPs) == 0 || !strings.HasPrefix(p.HostName, config.NodeNamePrefix) { //a weird one. probably a justified config item
+		if !p.Online || len(p.TailscaleIPs) == 0 || !strings.HasPrefix(p.HostName, config.NodeNamePrefix) {
 			continue
 		}
 
@@ -108,7 +108,7 @@ func (t *Recruiter) recruit(ctx context.Context, p *models.TSPeer) error {
 	}
 
 	payload := models.AssimilatePayload{
-		LeaderName:         config.NodeID(), //config.NodeID() -> leave alone, a consideration for another day
+		LeaderName:         config.NodeID(),
 		LeaderPeerURL:      t.peerURL(locIP),
 		EtcdInitialCluster: strings.Join(toks, ","),
 		AssignedIP:         ip,

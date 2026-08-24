@@ -5,10 +5,10 @@ Whitelisted standard library imports (* indicates that the import is targeted fo
 - fmt
 - strings
 - sync
+- time (types, units, and static values permitted, rest forbidden)
 - *os
 - *encoding/json
 - *log
-- *time
 
 Keep core logic lean and high-signal: push formatting, data transformation, and multi-step lookups down into adapters.
 Core should deal in model objects (or primitives if clearly appropriate). Adapters accept and return domain objects.

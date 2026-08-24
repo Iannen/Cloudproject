@@ -101,6 +101,10 @@ func (s *Store) Connect(ctx context.Context) error {
 }
 
 func (s *Store) CreateAssignment(ctx context.Context, a models.Assignment) error {
+	if a.ID == "" {
+		a.ID = fmt.Sprintf("%s-%s-%d", a.Role, a.NodeID, time.Now().UnixNano()%10000)
+	}
+
 	asgDefPath := s.asgDefPath(a.ID)
 	nodeAsgPath := s.nodeAssignmentsPath(a.NodeID)
 

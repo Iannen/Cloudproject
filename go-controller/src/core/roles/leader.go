@@ -6,7 +6,6 @@ import (
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"log"
-	"time"
 )
 
 type LeaderRole struct {
@@ -66,7 +65,7 @@ func (l *LeaderRole) reconcile(ctx context.Context) error {
 		}
 	}
 
-	for _, spec := range config.ClusterSpec { // the leader certainly needs the clusterspec. for now it can remain a config access
+	for _, spec := range config.ClusterSpec {
 		curr := byRole[spec.Name]
 		for i := 0; i < spec.Replicas-len(curr); i++ {
 			node := l.pickNode(nodes, curr)
@@ -74,13 +73,12 @@ func (l *LeaderRole) reconcile(ctx context.Context) error {
 				log.Printf("[Leader] No suitable node available for role %s", spec.Name)
 				break
 			}
-			id := fmt.Sprintf("%s-%s-%d", spec.Name, node, time.Now().UnixNano()%10000)
 
-			asg := models.Assignment{ID: id, NodeID: node, Role: spec.Name}
+			asg := models.Assignment{NodeID: node, Role: spec.Name}
 			if err := l.store.CreateAssignment(ctx, asg); err != nil {
 				log.Printf("[Leader] assign failed role=%s node=%s: %v", spec.Name, node, err)
 			} else {
-				log.Printf("[Leader] assigned id=%s node=%s", id, node)
+				log.Printf("[Leader] assigned role=%s node=%s", spec.Name, node)
 			}
 		}
 	}

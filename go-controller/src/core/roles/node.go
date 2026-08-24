@@ -30,7 +30,7 @@ func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) {
 			}
 		case <-ctx.Done():
 			log.Printf("[NodeRole] Shutting down HTTP listener for node %s", a.NodeID)
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), config.Timeout) //hm do we have a 'shutdownctx' for the purpose of shuttind down cms? that seems like a weird pattern
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), config.Timeout)
 			defer cancel()
 
 			if err := n.cms.Shutdown(shutdownCtx); err != nil {
@@ -42,7 +42,7 @@ func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) {
 }
 
 func (n *NodeRole) handleInit(ctx context.Context, body []byte) (string, error) {
-	id := config.NodeID() //for now we just leave the nodeid alone
+	id := config.NodeID()
 	if n.reg.IsActive("member-" + id) {
 		return fmt.Sprintf("Node %s already initialized.\n", id), nil
 	}

@@ -41,7 +41,7 @@ func NewMemberRole(store ParticipantStore, registry RoleMgr) *MemberRole {
 }
 
 func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
-	nodeID := config.NodeID() // NodeID feels like something one might want globally? but perhaps it can be passed to the relevant adapters on construction, after all?
+	nodeID := config.NodeID()
 	log.Println("[Member] Member role starting ")
 
 	for {
@@ -57,20 +57,20 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(config.RetryInterval): //the retry aspect of this should be inside the store boundary. the member just asks for a session, and gets the session or an error. dont we already pass the retryinterval to the etcd store adapter?
+			case <-time.After(config.RetryInterval):
 				continue
 			}
 		}
 
-		hbKey := config.NodeHeartbeatPath(nodeID)                                 //hbkey should be passed to store on construction.
-		if err := m.store.PutWithSession(ctx, sess, hbKey, "alive"); err != nil { //so that this method call just needs to pass the nodeId
+		hbKey := config.NodeHeartbeatPath(nodeID)
+		if err := m.store.PutWithSession(ctx, sess, hbKey, "alive"); err != nil {
 			log.Printf("[Member] Failed to register heartbeat presence: %v", err)
 			_ = sess.Close()
 			m.registry.StopManagedAssignments()
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(config.RetryInterval): //i straight up fail to understand what purpose this serves. are we running a retry loop here or inside the adapter (possibly)
+			case <-time.After(config.RetryInterval):
 				continue
 			}
 		}
