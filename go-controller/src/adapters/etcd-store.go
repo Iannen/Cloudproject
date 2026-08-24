@@ -29,13 +29,22 @@ type Store struct {
 	leaderKey           string
 	reconcileInterval   time.Duration
 	watchReconnectDelay time.Duration
+	nodeAssignmentsPath func(string) string
+	asgDefPath          func(string) string
 }
 
-func NewStore(leaderKey string, reconcileInterval, watchReconnectDelay time.Duration) *Store {
+func NewStore(
+	leaderKey string,
+	reconcileInterval, watchReconnectDelay time.Duration,
+	nodeAssignmentsPath func(string) string,
+	asgDefPath func(string) string,
+) *Store {
 	return &Store{
 		leaderKey:           leaderKey,
 		reconcileInterval:   reconcileInterval,
 		watchReconnectDelay: watchReconnectDelay,
+		nodeAssignmentsPath: nodeAssignmentsPath,
+		asgDefPath:          asgDefPath,
 	}
 }
 
@@ -133,7 +142,8 @@ func (s *Store) PutWithSession(ctx context.Context, sess models.Session, key, va
 	return err
 }
 
-func (s *Store) AssignmentDef(ctx context.Context, asgDefPath string) (*models.Assignment, error) {
+func (s *Store) AssignmentDef(ctx context.Context, assignmentID string) (*models.Assignment, error) {
+	asgDefPath := s.asgDefPath(assignmentID)
 	resp, err := s.cli.Get(ctx, asgDefPath)
 	if err != nil {
 		return nil, err
@@ -148,7 +158,8 @@ func (s *Store) AssignmentDef(ctx context.Context, asgDefPath string) (*models.A
 	return &a, nil
 }
 
-func (s *Store) NodeAssignments(ctx context.Context, nodeAsgPath string) ([]string, int64, error) {
+func (s *Store) NodeAssignments(ctx context.Context, nodeID string) ([]string, int64, error) {
+	nodeAsgPath := s.nodeAssignmentsPath(nodeID)
 	resp, err := s.cli.Get(ctx, nodeAsgPath)
 	if err != nil {
 		return nil, 0, err
@@ -180,12 +191,13 @@ func (s *Store) ClaimLeader(ctx context.Context, sess models.Session, leaderKey,
 	return resp.Succeeded, nil
 }
 
-func (s *Store) SubscribeEvents(ctx context.Context, nodeAsgPath string) (<-chan models.MemberEvent, error) {
-	_, rev, err := s.NodeAssignments(ctx, nodeAsgPath)
+func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.MemberEvent, error) {
+	_, rev, err := s.NodeAssignments(ctx, nodeID)
 	if err != nil {
 		return nil, err
 	}
 
+	nodeAsgPath := s.nodeAssignmentsPath(nodeID)
 	ch := make(chan models.MemberEvent, 10)
 
 	go s.runLeaderWatcher(ctx, ch)

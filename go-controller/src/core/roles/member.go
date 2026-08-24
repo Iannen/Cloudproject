@@ -6,7 +6,6 @@ import (
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"log"
-	"strings"
 	"time"
 )
 
@@ -16,8 +15,8 @@ type MemberRole struct {
 }
 
 type ParticipantStore interface {
-	NodeAssignments(ctx context.Context, nodeAsgPath string) ([]string, int64, error)
-	AssignmentDef(ctx context.Context, asgDefPath string) (*models.Assignment, error)
+	NodeAssignments(ctx context.Context, nodeID string) ([]string, int64, error)
+	AssignmentDef(ctx context.Context, assignmentID string) (*models.Assignment, error)
 	CreateAssignment(ctx context.Context, asgDefPath, nodeAsgPath string, a models.Assignment) error
 	NewSession(ctx context.Context, ttl int64, retries int, interval time.Duration) (models.Session, error)
 	PutWithSession(ctx context.Context, sess models.Session, key string, value string) error
@@ -53,7 +52,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 		sess, err := m.store.NewSession(ctx, config.SessionTTL, config.StartupRetries, config.RetryInterval)
 		if err != nil {
 			log.Printf("[Member] Failed to establish session: %v", err)
-			m.stopManagedAssignments()
+			m.registry.StopManagedAssignments()
 			select {
 			case <-ctx.Done():
 				return
@@ -66,7 +65,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 		if err := m.store.PutWithSession(ctx, sess, hbKey, "alive"); err != nil {
 			log.Printf("[Member] Failed to register heartbeat presence: %v", err)
 			_ = sess.Close()
-			m.stopManagedAssignments()
+			m.registry.StopManagedAssignments()
 			select {
 			case <-ctx.Done():
 				return
@@ -80,7 +79,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 		}
 
 		_ = sess.Close()
-		m.stopManagedAssignments()
+		m.registry.StopManagedAssignments()
 	}
 }
 
@@ -141,18 +140,8 @@ func (m *MemberRole) tryClaimLeadership(ctx context.Context, sess models.Session
 	}
 }
 
-func (m *MemberRole) stopManagedAssignments() {
-	active := m.registry.ActiveAssignments()
-	for id := range active {
-		if strings.HasPrefix(id, "node-") || strings.HasPrefix(id, "member-") {
-			continue
-		}
-		m.registry.Stop(id)
-	}
-}
-
 func (m *MemberRole) reconcile(ctx context.Context, nodeID string) {
-	ids, _, err := m.store.NodeAssignments(ctx, config.NodeAssignmentsPath(nodeID))
+	ids, _, err := m.store.NodeAssignments(ctx, nodeID)
 	if err != nil {
 		log.Printf("[Member] Error updating assignment state: %v", err)
 		return
@@ -165,9 +154,6 @@ func (m *MemberRole) reconcile(ctx context.Context, nodeID string) {
 
 	active := m.registry.ActiveAssignments()
 	for id := range active {
-		if strings.HasPrefix(id, "member-") || strings.HasPrefix(id, "node-") {
-			continue
-		}
 		if !want[id] {
 			m.registry.Stop(id)
 		}
@@ -175,7 +161,7 @@ func (m *MemberRole) reconcile(ctx context.Context, nodeID string) {
 
 	for _, id := range ids {
 		if !active[id] {
-			asg, err := m.store.AssignmentDef(ctx, config.AsgDefPath(id))
+			asg, err := m.store.AssignmentDef(ctx, id)
 			if err != nil {
 				log.Printf("[Member] fetch assignment def failed id=%s: %v", id, err)
 				continue

@@ -29,6 +29,8 @@ func main() {
 		config.ClusterLeaderKey,
 		config.ReconcileInterval,
 		config.WatchReconnectDelay,
+		config.NodeAssignmentsPath,
+		config.AsgDefPath,
 	)
 	httpSrv := adapters.NewHTTPServerAdapter()
 	httpCli := adapters.NewHTTPClientAdapter(

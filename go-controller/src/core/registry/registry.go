@@ -6,6 +6,7 @@ import (
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"go-controller/src/core/roles"
+	"strings"
 	"sync"
 )
 
@@ -116,11 +117,21 @@ func (r *Registry) StopAll() {
 	}
 }
 
+func (r *Registry) StopManagedAssignments() {
+	active := r.ActiveAssignments()
+	for id := range active {
+		r.Stop(id)
+	}
+}
+
 func (r *Registry) ActiveAssignments() map[string]bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	active := make(map[string]bool, len(r.runtimes))
 	for id := range r.runtimes {
+		if strings.HasPrefix(id, "node-") || strings.HasPrefix(id, "member-") {
+			continue
+		}
 		active[id] = true
 	}
 	return active

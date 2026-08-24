@@ -22,11 +22,14 @@ III. Immediate Goals (consider these first)
 - Re-establish session, presence heartbeat, and event watchers upon session expiration or transient raft leader unavailability
 - Ensure managed non-core assignments (any but node and member per helper) are cleanly stopped before attempting session recovery
 
-[ ] Refactor MemberRole assignment reconciliation 
-    [ ] Decouple key path resolution and identity filtering from MemberRole logic
-        - Move path formatting (e.g. `NodeAssignmentsPath`, `AsgDefPath`) down into store adapters
-            - `NodeAssignmentsPath`, `AsgDefPath` can be passed to adapter constructor and stored in adapter. the caller need only pass id
-        - Encapsulate non-managed system role checks (`node-`, `member-`) in the registry
+[x] Refactor MemberRole assignment reconciliation 
+    [x] Decouple key path resolution and identity filtering from MemberRole logic
+        - Injected `NodeAssignmentsPath` and `AsgDefPath` resolvers into `adapters.Store` constructor, updating `NodeAssignments`, `AssignmentDef`, and `SubscribeEvents` to accept logical IDs (`nodeID`, `assignmentID`) rather than formatted paths
+        - Removed explicit path formatting calls from `MemberRole.reconcile`
+    [x] Push unmanaged system role filtering (`node-`, `member-`) behind the Registry boundary
+        - Updated `Registry.ActiveAssignments()` to exclude internal system assignments (`node-` and `member-` prefixes) so callers only see managed workloads
+        - Added `Registry.StopManagedAssignments()` method to `RoleMgr` and `Registry` and delegated `MemberRole.stopManagedAssignments()` directly to it
+
 
 IV. Idea bucket:
 

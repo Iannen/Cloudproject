@@ -11,6 +11,7 @@ type RoleMgr interface {
 	Start(a *models.Assignment) error
 	Stop(assignmentID string)
 	StopAll()
+	StopManagedAssignments()
 	ActiveAssignments() map[string]bool
 	IsActive(assignmentID string) bool
 	InitializeStore() error
