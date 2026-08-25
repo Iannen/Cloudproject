@@ -34,10 +34,10 @@ func main() {
 		DownArgs:     []string{"down", "etcd", "--volumes", "--remove-orphans"},
 	})
 	etcd := adapters.NewStore(adapters.StoreConfig{
-		Endpoint:            config.EtcdEndpoint,
-		Timeout:             config.Timeout,
-		StartupInterval:     config.StartupInterval,
-		StartupRetries:      config.StartupRetries,
+		Endpoint:            etcdEndpoint,
+		Timeout:             timeout,
+		StartupInterval:     startupInterval,
+		StartupRetries:      startupRetries,
 		SessionTTL:          5,
 		RetryInterval:       2 * time.Second,
 		LeaderKey:           "cluster/leader",

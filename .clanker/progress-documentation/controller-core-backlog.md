@@ -11,6 +11,8 @@ I. Long term goals (ignore)
     [ ] Evict unreachable members via etcd API prior to adding new nodes
         - Resolves etcd "unhealthy cluster" blocks on AddLearner when a node is down (e.g., stopping 1 node in a 3-node cluster causes `add_learner` to fail with `etcdserver: unhealthy cluster` when recruiting a 4th node)
 
+[ ] Replace terminology relating to the word 'bootstrap', as this seems to trigger false positives with llm guardrails
+
 II. Medium term goals (investigatory)
 
 [ ] Add etcd status endpoint, for easy and comprehensive diagnostics of etcd related issues
@@ -38,7 +40,7 @@ II. Medium term goals (investigatory)
 
 III. Immediate Goals (consider these first)
 
-[ ] Group adapter configuration into explicit structs within their respective adapter files and update constructors. Update main.go wiring per subtask completion
+[x] Group adapter configuration into explicit structs within their respective adapter files and update constructors. Update main.go wiring per subtask completion
     The main file should not rely on config.go for the values, but supply them inline to the various config instantiations. the values no longer needed can be removed from config.go
     [x] Define DockerConfig in adapters package and refactor docker adapter (docker.go) constructor
     [x] Define StoreConfig in adapters package and refactor etcd store adapter (etcd-store.go) constructor
@@ -53,8 +55,14 @@ III. Immediate Goals (consider these first)
 		AsgDefPath:          config.AsgDefPath,'
     - instead the prefixes should be passed to the config constructor, and concatenation should be internal to the adapter (similar to how 'PrefixHeartbeats' and 'PrefixDefs' work)
     - item limited to those two points
+    [ ] Remove and and all unused content from config.go
 
-[ ] Discuss with user how the NodeID propagation should be handled in the system. is it smelly to pass it down to the adapters from go, so that no core member need be concerned with it (we retain the option of gettning the nodeid from the adapter on-site)
+[ ] Refactor NodeID propagation via OS adapter DI
+    [ ] Make main.go instantiate os adapter as first adapter
+    [ ] Add GetNodeID method to OS adapter interface
+    [ ] Retrieve NodeID in main.go from OS adapter at startup
+    [ ] Pass NodeID explicitly to StoreConfig and dependent adapters
+    [ ] Remove config.NodeID() calls and config dependency from core roles
 
 IV. Idea bucket:
 
