@@ -35,7 +35,7 @@ func (t *Recruiter) Run(ctx context.Context, a *models.Assignment) {
 				log.Printf("[TSMgr] Event stream error: %v", ev.Err)
 				continue
 			}
-			if err := t.reconcile(ctx); err != nil {
+			if err := t.reconcile(ctx, a.NodeID); err != nil {
 				log.Println(err)
 			}
 		}
@@ -46,7 +46,7 @@ func (t *Recruiter) peerURL(ip string) string {
 	return fmt.Sprintf("http://%s:2380", ip)
 }
 
-func (t *Recruiter) reconcile(ctx context.Context) error {
+func (t *Recruiter) reconcile(ctx context.Context, nodeID string) error {
 	seenIPs, err := t.str.GetClusterPeerURLs(ctx)
 	if err != nil {
 		return fmt.Errorf("[TSMgr] cluster member lookup failed: %w", err)
@@ -67,7 +67,7 @@ func (t *Recruiter) reconcile(ctx context.Context) error {
 			continue
 		}
 
-		if err := t.recruit(ctx, p); err != nil {
+		if err := t.recruit(ctx, nodeID, p); err != nil {
 			return err
 		}
 	}
@@ -75,7 +75,7 @@ func (t *Recruiter) reconcile(ctx context.Context) error {
 	return nil
 }
 
-func (t *Recruiter) recruit(ctx context.Context, p *models.TSPeer) error {
+func (t *Recruiter) recruit(ctx context.Context, nodeID string, p *models.TSPeer) error {
 	ip := p.TailscaleIPs[0]
 
 	locIP, err := t.ts.GetLocalIP(ctx)
@@ -107,7 +107,7 @@ func (t *Recruiter) recruit(ctx context.Context, p *models.TSPeer) error {
 	}
 
 	payload := models.AssimilatePayload{
-		LeaderName:         config.NodeID(),
+		LeaderName:         nodeID,
 		LeaderPeerURL:      t.peerURL(locIP),
 		EtcdInitialCluster: strings.Join(toks, ","),
 		AssignedIP:         ip,

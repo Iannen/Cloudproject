@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"log"
 )
@@ -40,7 +39,7 @@ func NewMemberRole(store ParticipantStore, registry RoleMgr) *MemberRole {
 }
 
 func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
-	nodeID := config.NodeID()
+	nodeID := asg.NodeID
 	log.Println("[Member] Member role starting ")
 
 	for {

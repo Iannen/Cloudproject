@@ -114,3 +114,16 @@ XXV: Refactored Reconcile Loop Subscriptions and Purged Core Time Dependencies
     - Refactored Leader, Recruiter, and Member roles to acquire reconciliation tick and state change triggers via event channels managed by store adapters.
     - Decoupled internal loop timers from core roles and encapsulated retry logic, polling intervals, and time-based operations within infrastructure adapters.
     - Achieved full compliance with core doctrine standard library import restrictions by eliminating all `time` package imports across core role implementations.
+
+XXVI: Struct-Based Adapter Configuration and Inline Wiring
+    - Defined explicit configuration structs (`DockerConfig`, `StoreConfig`, `HTTPClientConfig`, `HTTPServerConfig`, `OsConfig`, `TailscaleConfig`) in `adapters` package and refactored adapter constructors.
+    - Updated `main.go` to construct adapters using inline configurations, removing direct reliance on `config.go` for adapter settings.
+
+XXVII: Encapsulated Key Path Concatenation in Store Adapter
+    - Refactored `StoreConfig` to accept key path prefixes and delegate key path concatenation internally within the `Store` adapter.
+    - Eliminated remaining `config.NodeAssignmentsPath` and `config.AsgDefPath` references from `main.go`.
+
+XXVIII: Refactored NodeID Propagation via OS Adapter Dependency Injection
+    - Established `OsAdapter` as the primary `NodeID` provider initialized first in `main.go` and wired into downstream adapter configurations.
+    - Decoupled `MemberRole`, `NodeRole`, and `Recruiter` from global environment state by propagating `NodeID` through assignment models and `FileMgr` interface calls.
+    - Completely removed `func NodeID()` from `config.go` and eliminated `os` standard library imports across core packages.

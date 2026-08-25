@@ -11,7 +11,16 @@ I. Long term goals (ignore)
     [ ] Evict unreachable members via etcd API prior to adding new nodes
         - Resolves etcd "unhealthy cluster" blocks on AddLearner when a node is down (e.g., stopping 1 node in a 3-node cluster causes `add_learner` to fail with `etcdserver: unhealthy cluster` when recruiting a 4th node)
 
-[ ] Replace terminology relating to the word 'bootstrap', as this seems to trigger false positives with llm guardrails
+[ ] Mitigate LLM Guardrail False Positives Across Projects
+    - [ ] Sanitize Security-Adjacent Vocabulary: Map high-trigger operational terms to architectural equivalents across prompts:
+        'bootstrap' / 'setup' → 'initialize' / 'instantiate'
+        'hook' / 'intercept' → 'handler' / 'middleware'
+        'kill' / 'destroy' → 'terminate' / 'dispose'
+        'execute' / 'spawn' → 'run' / 'process'
+        'inject' → 'pass dependency' / 'wire'
+        'daemon' / 'agent' → 'background service'
+    - [ ] Prepend Domain Context Headers: Frame prompt sessions explicitly as software refactoring or system design (e.g., "Context: Abstract software refactoring following Clean Architecture and Dependency Inversion patterns.").
+    - [ ] Decouple Infrastructure from Core Domain: Keep low-level system operations (I/O, network sockets, OS calls, environment management) isolated behind interface boundaries/adapters so prompt payloads only expose pure business models and abstract contracts.
 
 II. Medium term goals (investigatory)
 
@@ -38,36 +47,9 @@ II. Medium term goals (investigatory)
     ├── adapters/     <-- Infrastructure implementations (Supplier)
     └── main.go       <-- Wiring & initialization (Organizer)
 
+[ ] Should the roles store the assignmentdefs they receive in Run on themselves, for ease of reference?
+
 III. Immediate Goals (consider these first)
-
-[x] Group adapter configuration into explicit structs within their respective adapter files and update constructors. Update main.go wiring per subtask completion
-    The main file should not rely on config.go for the values, but supply them inline to the various config instantiations. the values no longer needed can be removed from config.go
-    [x] Define DockerConfig in adapters package and refactor docker adapter (docker.go) constructor
-    [x] Define StoreConfig in adapters package and refactor etcd store adapter (etcd-store.go) constructor
-    [x] Define HTTPClientConfig in adapters package and refactor HTTP client adapter (http-client.go) constructor
-    [x] Define HTTPServerConfig in adapters package and refactor HTTP server adapter (http-server.go) constructor
-    [x] Define OsConfig in adapters package and refactor OS adapter (os.go) constructor
-    [x] Define TailscaleConfig in adapters package and refactor Tailscale adapter (tailscale.go) constructor
-
-[x] Further porting of config members to adapter layer.
-    - main.go, when constructing 'StoreConfig' should not rely on config for 
-        NodeAssignmentsPath: config.NodeAssignmentsPath,
-		AsgDefPath:          config.AsgDefPath,'
-    - instead the prefixes should be passed to the config constructor, and concatenation should be internal to the adapter (similar to how 'PrefixHeartbeats' and 'PrefixDefs' work)
-    - item limited to those two points
-    [ ] Remove and and all unused content from config.go
-
-[ ] Refactor NodeID propagation via OS adapter DI
-    [ ] Phase 1: Establish NodeID source via OS adapter and wire dependencies in main.go
-        [ ] Make main.go instantiate os adapter as first adapter
-        [ ] Add GetNodeID method to OS adapter interface
-        [ ] Retrieve NodeID in main.go from OS adapter at startup
-        [ ] Update StoreConfig and constructor to require NodeID explicitly
-        [ ] Pass NodeID explicitly from main.go to StoreConfig and dependent adapters
-    [ ] Phase 2: Eliminate global config.NodeID() calls across core roles
-        [ ] Update NewMemberRole / MemberRole to accept nodeID directly (or via assignment)
-        [ ] Audit and replace config.NodeID() calls in node.go, member.go, and recruiter.go
-        [ ] Remove NodeID() helper function from core/config/config.go
 
 IV. Idea bucket:
 

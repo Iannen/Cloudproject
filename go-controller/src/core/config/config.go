@@ -2,7 +2,6 @@ package config
 
 import (
 	"go-controller/src/core/models"
-	"os"
 	"time"
 )
 
@@ -29,5 +28,3 @@ const (
 var ClusterSpec = []models.RoleSpec{
 	{Name: "tailscale-manager", Replicas: 1},
 }
-
-func NodeID() string { return os.Getenv("NODE_ID") }

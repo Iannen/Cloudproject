@@ -41,7 +41,7 @@ func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) {
 }
 
 func (n *NodeRole) handleInit(ctx context.Context, body []byte) (string, error) {
-	id := config.NodeID()
+	id := n.osa.GetNodeID()
 	if n.reg.IsActive("member-" + id) {
 		return fmt.Sprintf("Node %s already initialized.\n", id), nil
 	}
@@ -68,7 +68,7 @@ func (n *NodeRole) handleAssimilate(ctx context.Context, body []byte) (string, e
 		return "", fmt.Errorf("invalid payload: %w", err)
 	}
 
-	if err := n.osa.WriteEnvConfig(ctx, config.NodeID(), p); err != nil {
+	if err := n.osa.WriteEnvConfig(ctx, n.osa.GetNodeID(), p); err != nil { //TODO: simplify so that osa gets the nodeId internally (it is both supplier and consumer here, which smells)
 		return "", fmt.Errorf("config write failed: %w", err)
 	}
 
@@ -90,7 +90,7 @@ func (n *NodeRole) handleActivate(ctx context.Context, body []byte) (string, err
 	if err := n.activateMember(ctx); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("Node %s activated.\n", config.NodeID()), nil
+	return fmt.Sprintf("Node %s activated.\n", n.osa.GetNodeID()), nil
 }
 
 func (n *NodeRole) handleGetLogs(ctx context.Context, body []byte) (string, error) {
@@ -109,7 +109,7 @@ func (n *NodeRole) activateMember(_ context.Context) error {
 	if err := n.InitializeStore(); err != nil {
 		return fmt.Errorf("etcd connect failed: %w", err)
 	}
-	return n.reg.Start(NewMemberAssignment(config.NodeID()))
+	return n.reg.Start(NewMemberAssignment(n.osa.GetNodeID()))
 }
 
 type HTTPServer interface {
