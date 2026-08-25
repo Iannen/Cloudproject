@@ -132,3 +132,8 @@ XXIX: Encapsulated Identity Lookup in OS File Manager Adapter
     - Refactored `FileMgr` interface signature by removing the explicit `nodeID` parameter from `WriteEnvConfig`.
     - Updated `OsAdapter.WriteEnvConfig` implementation to retrieve node identity internally via `GetNodeID()`.
     - Simplified `NodeRole.handleAssimilate` by removing the redundant identity lookup argument during environment configuration updates.
+
+XXX: Consolidated Role Domain Interface Declarations into Core Roles Interfaces
+    - Centralized interface definitions (`AssignmentStore`, `ParticipantStore`, `HTTPServer`, `HealthChecker`, `FileMgr`, `DockerMgr`, `RpcClient`, `ClusterMgr`, `TSClient`) inside `go-controller/src/core/roles/interfaces.go`.
+    - Refactored `roles/leader.go`, `roles/member.go`, `roles/node.go`, and `roles/recruiter.go` to consume interfaces from `interfaces.go`.
+    - Cleaned up redundant localized interface definitions across individual role domain files.

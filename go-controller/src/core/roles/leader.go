@@ -86,13 +86,6 @@ func (l *LeaderRole) reconcile(ctx context.Context) error {
 	return nil
 }
 
-type AssignmentStore interface {
-	GetActiveNodeIDs(ctx context.Context) ([]string, error)
-	GetAllAssignments(ctx context.Context) ([]models.Assignment, error)
-	CreateAssignment(ctx context.Context, a models.Assignment) error
-	SubscribeLeaderEvents(ctx context.Context) (<-chan models.LeaderEvent, error)
-}
-
 func (l *LeaderRole) pickNode(nodes []string, existing []models.Assignment) string {
 	if len(nodes) == 0 {
 		return ""

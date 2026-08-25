@@ -112,26 +112,6 @@ func (n *NodeRole) activateMember(_ context.Context) error {
 	return n.reg.Start(NewMemberAssignment(n.osa.GetNodeID()))
 }
 
-type HTTPServer interface {
-	RegisterGetRoute(pattern string, handler models.DomainHandler)
-	RegisterPostRoute(pattern string, handler models.DomainHandler)
-	Start() <-chan error
-	Shutdown(ctx context.Context) error
-}
-type HealthChecker interface {
-	WaitEtcdReady(ctx context.Context) error
-}
-type FileMgr interface {
-	GetNodeID() string
-	WriteEnvConfig(ctx context.Context, payload models.AssimilatePayload) error
-}
-
-type DockerMgr interface {
-	StartEtcd(ctx context.Context) error
-	ResetEtcd(ctx context.Context) error
-	GetLogs(ctx context.Context, containerID string) (string, error)
-}
-
 func NewNodeRole(reg RoleMgr, dcr DockerMgr, osa FileMgr, cms HTTPServer, spk HealthChecker) *NodeRole {
 	n := &NodeRole{reg: reg, dcr: dcr, osa: osa, cms: cms, spk: spk}
 	n.cms.RegisterGetRoute("/initialize", n.handleInit)

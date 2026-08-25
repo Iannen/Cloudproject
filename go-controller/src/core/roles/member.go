@@ -13,16 +13,6 @@ type MemberRole struct {
 	registry RoleMgr
 }
 
-type ParticipantStore interface {
-	NodeAssignments(ctx context.Context, nodeID string) ([]string, int64, error)
-	AssignmentDef(ctx context.Context, assignmentID string) (*models.Assignment, error)
-	CreateAssignment(ctx context.Context, a models.Assignment) error
-	NewSession(ctx context.Context) (models.Session, error)
-	PutWithSession(ctx context.Context, sess models.Session, nodeID string, value string) error
-	ClaimLeader(ctx context.Context, sess models.Session, nodeID string) (bool, error)
-	SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.MemberEvent, error)
-}
-
 func NewMemberAssignment(nodeID string) *models.Assignment {
 	return &models.Assignment{
 		NodeID: nodeID,

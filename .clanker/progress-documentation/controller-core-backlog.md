@@ -11,17 +11,6 @@ I. Long term goals (ignore)
     [ ] Evict unreachable members via etcd API prior to adding new nodes
         - Resolves etcd "unhealthy cluster" blocks on AddLearner when a node is down (e.g., stopping 1 node in a 3-node cluster causes `add_learner` to fail with `etcdserver: unhealthy cluster` when recruiting a 4th node)
 
-[ ] Mitigate LLM Guardrail False Positives Across Projects
-    - [ ] Sanitize Security-Adjacent Vocabulary: Map high-trigger operational terms to architectural equivalents across prompts:
-        'bootstrap' / 'setup' → 'initialize' / 'instantiate'
-        'hook' / 'intercept' → 'handler' / 'middleware'
-        'kill' / 'destroy' → 'terminate' / 'dispose'
-        'execute' / 'spawn' → 'run' / 'process'
-        'inject' → 'pass dependency' / 'wire'
-        'daemon' / 'agent' → 'background service'
-    - [ ] Prepend Domain Context Headers: Frame prompt sessions explicitly as software refactoring or system design (e.g., "Context: Abstract software refactoring following Clean Architecture and Dependency Inversion patterns.").
-    - [ ] Decouple Infrastructure from Core Domain: Keep low-level system operations (I/O, network sockets, OS calls, environment management) isolated behind interface boundaries/adapters so prompt payloads only expose pure business models and abstract contracts.
-
 II. Medium term goals (investigatory)
 
 [ ] Add etcd status endpoint, for easy and comprehensive diagnostics of etcd related issues
@@ -30,12 +19,16 @@ II. Medium term goals (investigatory)
 
 [ ] Categorize the models.go members appropriately into files (thinking models/domain.go models/dto.go)
 
-[ ] Consider moving all interfaces used by the roles into roles/interfaces.go
-    - while this is not idiomatic in go, it probably isnt a big violation and carries advantages in prompt engineering (not visible from inside the project)
-
 [ ] Look for commonalities of the various roles, potentially leading refactors that save characters/tokens and presents a cleaner, more solid architecture
 
-[ ] Evaluate wether the projects usage of pointers vs value is consistent & idiomatic (looking at you, NewLeaderAssignment and NewMemberAssignment)
+[ ] Evaluate whether the project's usage of pointers vs value is consistent & idiomatic
+    [ ] Standardize Assignment entity semantics across core domain
+        - Align NewLeaderAssignment (returns value) and NewMemberAssignment (returns pointer) constructor signatures to both return values
+            - i assess that assignmentdefs dont need mutation in this system
+        - align their usages in codebase to the value semantics 
+    [ ] Audit domain models and DTOs for value vs pointer receiver consistency
+        - Review MemberInfo vs TSPeer struct usage across Recruiter and Store interfaces
+        - Audit error event types (MemberEvent, LeaderEvent, RecruiterEvent) passed over channels
 
 [ ] Evaluate main.go with regards to its imports and workings outside of the DI. What is the idiom 
 

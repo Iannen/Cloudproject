@@ -9,6 +9,7 @@ II. Medium term goals (investigatory)
 III. Immediate Goals (consider these first)
 
 IV. Idea bucket:
+    - history mgm prompt dont need the doctrine
 
 V. Known Bugs:
 

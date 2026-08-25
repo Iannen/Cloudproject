@@ -137,21 +137,3 @@ func NewRecruiter(str ClusterMgr, ts TSClient, http RpcClient) *Recruiter {
 		http: http,
 	}
 }
-
-type RpcClient interface {
-	Assimilate(ctx context.Context, targetIP string, payload models.AssimilatePayload) error
-	Activate(ctx context.Context, targetIP string) error
-}
-
-type ClusterMgr interface {
-	GetClusterPeerURLs(ctx context.Context) (map[string]bool, error)
-	AddLearner(ctx context.Context, peerURL string) (*models.MemberInfo, []models.MemberInfo, error)
-	PromoteMember(ctx context.Context, memberID uint64) error
-	RemoveMember(ctx context.Context, memberID uint64) error
-	SubscribeRecruiterEvents(ctx context.Context) (<-chan models.RecruiterEvent, error)
-}
-
-type TSClient interface {
-	GetPeers(ctx context.Context) ([]*models.TSPeer, error)
-	GetLocalIP(ctx context.Context) (string, error)
-}
