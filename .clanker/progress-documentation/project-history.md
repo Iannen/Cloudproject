@@ -144,3 +144,10 @@ XXXI: Refactored core/models into modular domain and DTO files
     - Moved AssimilatePayload and TSStatus to dto.go.
     - Grouped MemberEvent, LeaderEvent, and RecruiterEvent definitions into events.go.
     - Moved DomainHandler function signature to handlers.go.
+
+XXXII: Value semantics standardized for Assignment across core models and role execution
+    - Converted NewLeaderAssignment and NewMemberAssignment to return Assignment by value.
+    - Updated TSPeer and TSStatus to use value semantics for assignment-related fields.
+    - Relocated Session interface definition to models/interfaces.go to align core package structure with project doctrine.
+    - Refactored role constructors (NewNodeRole, NewMemberRole, NewLeaderRole, NewRecruiter) and Registry runners to pass Assignment definitions by value.
+    - Simplified role execution methods by removing redundant nodeID parameters.

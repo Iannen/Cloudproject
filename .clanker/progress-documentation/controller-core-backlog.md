@@ -1,4 +1,4 @@
-I. Long term goals (ignore)
+I. Long term items:
 
 [ ] Redesign role lifecycle architecture into a 3-tier hierarchy
     - Tier 1 (NodeRole): Maintained directly by main.go as host process; exempt from registry
@@ -11,7 +11,7 @@ I. Long term goals (ignore)
     [ ] Evict unreachable members via etcd API prior to adding new nodes
         - Resolves etcd "unhealthy cluster" blocks on AddLearner when a node is down (e.g., stopping 1 node in a 3-node cluster causes `add_learner` to fail with `etcdserver: unhealthy cluster` when recruiting a 4th node)
 
-II. Medium term goals (investigatory)
+II. Items under development:
 
 [ ] Add etcd status endpoint, for easy and comprehensive diagnostics of etcd related issues
 
@@ -21,18 +21,14 @@ II. Medium term goals (investigatory)
 
 [ ] Evaluate main.go with regards to its imports and workings outside of the DI. What is the idiom 
 
-III. Immediate Goals (consider these first)
+III. Ran-into-trouble items:
 
-[x] Standardize Assignment entity semantics across core domain (value vs pointer)
-    [x] Align NewLeaderAssignment (returns value) and NewMemberAssignment (returns pointer) to value semantics
-    [x] Align TSPeer and TSStatus to value semantics
-    [x] Relocate Session interface definition from models/domain.go to models/session.go to align with doctrine
+- Migrate encoding/json dependency from core into adapters:
+    - For routes with a request body, 'Node.go' route registration use arguments 'route string', 'node handler method' and 'domain model type', so that they can receive deserialized domain model object from the adapter/itf.
+    - The challenge is passing the type information needed for deserialization. 
 
-[x] Refactor roles to accept Assignment by value at construction
-    [x] Pass Assignment by value to NewRole constructors instead of passing pointers in Run()
-    [x] Remove redundant nodeID parameters from internal role execution methods. 
-    [x] Update RoleRunner and Registry interfaces to reflect value semantics
+IV. Pending items
 
-IV. Idea bucket:
+V. Idea bucket:
 
-V. Bugs:
+VI. Bugs:
