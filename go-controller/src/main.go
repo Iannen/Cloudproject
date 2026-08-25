@@ -19,13 +19,13 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	docker := adapters.NewDockerAdapter(
-		config.DockerBinary,
-		config.BootstrapDir,
-		config.DockerComposeCmd,
-		config.DockerUpArgs,
-		config.DockerDownArgs,
-	)
+	docker := adapters.NewDockerAdapter(adapters.DockerConfig{
+		BinaryPath:   "docker",
+		BootstrapDir: config.BootstrapDir,
+		ComposeCmd:   []string{"compose"},
+		UpArgs:       []string{"up", "-d", "etcd"},
+		DownArgs:     []string{"down", "etcd", "--volumes", "--remove-orphans"},
+	})
 	etcd := adapters.NewStore(
 		config.EtcdEndpoint,
 		config.Timeout,

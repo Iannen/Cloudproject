@@ -17,9 +17,6 @@ II. Medium term goals (investigatory)
 
 [ ] Phase out core imports in acc with doctrine
 
-[ ] Create config structs per adapter in the config package. pass those directly to the adapters
-    - i think this will save loads of characters, by reducing the number of times a particular value must be 'mentioned'
-
 [ ] Categorize the models.go members appropriately into files (thinking models/domain.go models/dto.go)
 
 [ ] Consider moving all interfaces used by the roles into roles/interfaces.go
@@ -40,6 +37,14 @@ II. Medium term goals (investigatory)
     └── main.go       <-- Wiring & initialization (Organizer)
 
 III. Immediate Goals (consider these first)
+
+[ ] Group adapter configuration into explicit structs within their respective adapter files and update constructors. Update main.go wiring per subtask completion
+    [x] Define DockerConfig in adapters package and refactor docker adapter (docker.go) constructor
+    [ ] Define StoreConfig in adapters package and refactor etcd store adapter (etcd-store.go) constructor
+    [ ] Define HTTPClientConfig in adapters package and refactor HTTP client adapter (http-client.go) constructor
+    [ ] Define HTTPServerConfig in adapters package and refactor HTTP server adapter (http-server.go) constructor
+    [ ] Define OsConfig in adapters package and refactor OS adapter (os.go) constructor
+    [ ] Define TailscaleConfig in adapters package and refactor Tailscale adapter (tailscale.go) constructor
 
 IV. Idea bucket:
 
