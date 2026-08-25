@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"go-controller/src/adapters"
-	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"go-controller/src/core/registry"
 	"log"
@@ -14,17 +13,24 @@ import (
 )
 
 func main() {
-	nodeID := config.NodeID()
-	log.Printf("[Main] Starting node with ID: %s", nodeID)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	var timeout = 3 * time.Second
 	var bootstrapDir = "/root/bootstrap"
 	var etcdEndpoint = "localhost:2379"
 	var startupInterval = 1 * time.Second
 	var startupRetries = 10
+
+	osa := adapters.NewOsAdapter(adapters.OsConfig{
+		BootstrapDir: bootstrapDir,
+		EnvFileName:  ".env",
+		FilePerms:    0644,
+		EnvTemplate:  "HOSTNAME=%s\nTAILSCALE_IP=%s\nETCD_NAME=%s\nETCD_INITIAL_CLUSTER=%s\nETCD_INITIAL_CLUSTER_STATE=existing\n",
+	})
+
+	nodeID := osa.GetNodeID()
+	log.Printf("[Main] Starting node with ID: %s", nodeID)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	docker := adapters.NewDockerAdapter(adapters.DockerConfig{
 		BinaryPath:   "docker",
@@ -34,6 +40,7 @@ func main() {
 		DownArgs:     []string{"down", "etcd", "--volumes", "--remove-orphans"},
 	})
 	etcd := adapters.NewStore(adapters.StoreConfig{
+		NodeID:              nodeID,
 		Endpoint:            etcdEndpoint,
 		Timeout:             timeout,
 		StartupInterval:     startupInterval,
@@ -58,12 +65,6 @@ func main() {
 		EtcdEndpoint:         etcdEndpoint,
 		StartupRetries:       startupRetries,
 		StartupInterval:      startupInterval,
-	})
-	osa := adapters.NewOsAdapter(adapters.OsConfig{
-		BootstrapDir: bootstrapDir,
-		EnvFileName:  ".env",
-		FilePerms:    0644,
-		EnvTemplate:  "HOSTNAME=%s\nTAILSCALE_IP=%s\nETCD_NAME=%s\nETCD_INITIAL_CLUSTER=%s\nETCD_INITIAL_CLUSTER_STATE=existing\n",
 	})
 	ts := adapters.NewTailscaleAdapter(adapters.TailscaleConfig{
 		BinaryPath: "tailscale",

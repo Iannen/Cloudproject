@@ -32,6 +32,10 @@ func NewOsAdapter(cfg OsConfig) *OsAdapter {
 	}
 }
 
+func (b *OsAdapter) GetNodeID() string {
+	return os.Getenv("NODE_ID")
+}
+
 func (b *OsAdapter) WriteEnvConfig(ctx context.Context, id string, p models.AssimilatePayload) error {
 	env := fmt.Sprintf(b.envTemplate, id, p.AssignedIP, id, p.EtcdInitialCluster)
 

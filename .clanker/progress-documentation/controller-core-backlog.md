@@ -58,11 +58,16 @@ III. Immediate Goals (consider these first)
     [ ] Remove and and all unused content from config.go
 
 [ ] Refactor NodeID propagation via OS adapter DI
-    [ ] Make main.go instantiate os adapter as first adapter
-    [ ] Add GetNodeID method to OS adapter interface
-    [ ] Retrieve NodeID in main.go from OS adapter at startup
-    [ ] Pass NodeID explicitly to StoreConfig and dependent adapters
-    [ ] Remove config.NodeID() calls and config dependency from core roles
+    [ ] Phase 1: Establish NodeID source via OS adapter and wire dependencies in main.go
+        [ ] Make main.go instantiate os adapter as first adapter
+        [ ] Add GetNodeID method to OS adapter interface
+        [ ] Retrieve NodeID in main.go from OS adapter at startup
+        [ ] Update StoreConfig and constructor to require NodeID explicitly
+        [ ] Pass NodeID explicitly from main.go to StoreConfig and dependent adapters
+    [ ] Phase 2: Eliminate global config.NodeID() calls across core roles
+        [ ] Update NewMemberRole / MemberRole to accept nodeID directly (or via assignment)
+        [ ] Audit and replace config.NodeID() calls in node.go, member.go, and recruiter.go
+        [ ] Remove NodeID() helper function from core/config/config.go
 
 IV. Idea bucket:
 

@@ -122,6 +122,7 @@ type HealthChecker interface {
 	WaitEtcdReady(ctx context.Context) error
 }
 type FileMgr interface {
+	GetNodeID() string
 	WriteEnvConfig(ctx context.Context, nodeID string, payload models.AssimilatePayload) error
 }
 

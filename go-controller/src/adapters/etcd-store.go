@@ -25,6 +25,7 @@ func (e *etcdSession) Close() error {
 }
 
 type StoreConfig struct {
+	NodeID              string
 	Endpoint            string
 	Timeout             time.Duration
 	StartupInterval     time.Duration
