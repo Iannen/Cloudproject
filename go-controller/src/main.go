@@ -23,6 +23,8 @@ func main() {
 	var timeout = 3 * time.Second
 	var bootstrapDir = "/root/bootstrap"
 	var etcdEndpoint = "localhost:2379"
+	var startupInterval = 1 * time.Second
+	var startupRetries = 10
 
 	docker := adapters.NewDockerAdapter(adapters.DockerConfig{
 		BinaryPath:   "docker",
@@ -34,8 +36,8 @@ func main() {
 	etcd := adapters.NewStore(adapters.StoreConfig{
 		Endpoint:            etcdEndpoint,
 		Timeout:             timeout,
-		StartupInterval:     config.StartupInterval,
-		StartupRetries:      config.StartupRetries,
+		StartupInterval:     startupInterval,
+		StartupRetries:      startupRetries,
 		SessionTTL:          5,
 		RetryInterval:       2 * time.Second,
 		LeaderKey:           "cluster/leader",
@@ -55,8 +57,8 @@ func main() {
 		AssimilateURLPattern: "http://%s:8080/assimilate",
 		ActivateURLPattern:   "http://%s:8080/activate",
 		EtcdEndpoint:         etcdEndpoint,
-		StartupRetries:       10,
-		StartupInterval:      1 * time.Second,
+		StartupRetries:       startupRetries,
+		StartupInterval:      startupInterval,
 	})
 	osa := adapters.NewOsAdapter(adapters.OsConfig{
 		BootstrapDir: bootstrapDir,

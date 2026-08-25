@@ -45,7 +45,14 @@ III. Immediate Goals (consider these first)
     [x] Define HTTPClientConfig in adapters package and refactor HTTP client adapter (http-client.go) constructor
     [x] Define HTTPServerConfig in adapters package and refactor HTTP server adapter (http-server.go) constructor
     [x] Define OsConfig in adapters package and refactor OS adapter (os.go) constructor
-    [ ] Define TailscaleConfig in adapters package and refactor Tailscale adapter (tailscale.go) constructor
+    [x] Define TailscaleConfig in adapters package and refactor Tailscale adapter (tailscale.go) constructor
+
+[ ] Further porting of config members to adapter layer.
+    - main.go, when constructing 'StoreConfig' should not rely on config for 
+        NodeAssignmentsPath: config.NodeAssignmentsPath,
+		AsgDefPath:          config.AsgDefPath,'
+    - instead the prefixes should be passed to the config constructor, and concatenation should be internal to the adapter (similar to how 'PrefixHeartbeats' and 'PrefixDefs' work)
+    - item limited to those two points
 
 IV. Idea bucket:
 
