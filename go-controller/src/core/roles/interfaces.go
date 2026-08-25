@@ -7,7 +7,7 @@ import (
 )
 
 type RoleMgr interface {
-	Start(a *models.Assignment) error
+	Start(a models.Assignment) error
 	Stop(assignmentID string)
 	StopAll()
 	StopManagedAssignments()

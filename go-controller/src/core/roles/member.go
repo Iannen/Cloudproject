@@ -9,6 +9,7 @@ import (
 )
 
 type MemberRole struct {
+	asg      models.Assignment
 	store    ParticipantStore
 	registry RoleMgr
 }
@@ -21,15 +22,16 @@ func NewMemberAssignment(nodeID string) models.Assignment {
 	}
 }
 
-func NewMemberRole(store ParticipantStore, registry RoleMgr) *MemberRole {
+func NewMemberRole(asg models.Assignment, store ParticipantStore, registry RoleMgr) *MemberRole {
 	return &MemberRole{
+		asg:      asg,
 		store:    store,
 		registry: registry,
 	}
 }
 
-func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
-	nodeID := asg.NodeID
+func (m *MemberRole) Run(ctx context.Context) {
+	nodeID := m.asg.NodeID
 	log.Println("[Member] Member role starting ")
 
 	for {
@@ -58,7 +60,7 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 			continue
 		}
 
-		if err := m.runSession(ctx, sess, nodeID); err != nil {
+		if err := m.runSession(ctx, sess); err != nil {
 			log.Printf("[Member] Session terminated: %v", err)
 		}
 
@@ -67,11 +69,11 @@ func (m *MemberRole) Run(ctx context.Context, asg *models.Assignment) {
 	}
 }
 
-func (m *MemberRole) runSession(sCtx context.Context, sess models.Session, nodeID string) error {
-	m.tryClaimLeadership(sCtx, sess, nodeID)
-	m.reconcile(sCtx, nodeID)
+func (m *MemberRole) runSession(sCtx context.Context, sess models.Session) error {
+	m.tryClaimLeadership(sCtx, sess)
+	m.reconcile(sCtx)
 
-	ch, err := m.store.SubscribeEvents(sCtx, nodeID)
+	ch, err := m.store.SubscribeEvents(sCtx, m.asg.NodeID)
 	if err != nil {
 		return err
 	}
@@ -95,10 +97,10 @@ func (m *MemberRole) runSession(sCtx context.Context, sess models.Session, nodeI
 
 			switch ev.Type {
 			case models.EventLeaderDeleted:
-				m.tryClaimLeadership(sCtx, sess, nodeID)
+				m.tryClaimLeadership(sCtx, sess)
 
 			case models.EventAssignmentChange, models.EventReconcileTick:
-				m.reconcile(sCtx, nodeID)
+				m.reconcile(sCtx)
 
 			default:
 				log.Printf("[Member] Unhandled event type: %s", ev.Type)
@@ -107,8 +109,8 @@ func (m *MemberRole) runSession(sCtx context.Context, sess models.Session, nodeI
 	}
 }
 
-func (m *MemberRole) tryClaimLeadership(ctx context.Context, sess models.Session, nodeID string) {
-	isLeader, err := m.store.ClaimLeader(ctx, sess, nodeID)
+func (m *MemberRole) tryClaimLeadership(ctx context.Context, sess models.Session) {
+	isLeader, err := m.store.ClaimLeader(ctx, sess, m.asg.NodeID)
 	if err != nil {
 		log.Printf("[Member] Leadership claim attempt error: %v", err)
 		return
@@ -118,14 +120,14 @@ func (m *MemberRole) tryClaimLeadership(ctx context.Context, sess models.Session
 		return
 	}
 	log.Println("[Member] Won leadership! Launching Leader Role...")
-	asg := NewLeaderAssignment(nodeID)
+	asg := NewLeaderAssignment(m.asg.NodeID)
 	if err := m.store.CreateAssignment(ctx, asg); err != nil {
 		log.Printf("[Member] Failed to write leader assignment definition: %v", err)
 	}
 }
 
-func (m *MemberRole) reconcile(ctx context.Context, nodeID string) {
-	ids, _, err := m.store.NodeAssignments(ctx, nodeID)
+func (m *MemberRole) reconcile(ctx context.Context) {
+	ids, _, err := m.store.NodeAssignments(ctx, m.asg.NodeID)
 	if err != nil {
 		log.Printf("[Member] Error updating assignment state: %v", err)
 		return
@@ -150,8 +152,10 @@ func (m *MemberRole) reconcile(ctx context.Context, nodeID string) {
 				log.Printf("[Member] fetch assignment def failed id=%s: %v", id, err)
 				continue
 			}
-			if err := m.registry.Start(asg); err != nil {
-				log.Printf("[Member] start assignment failed id=%s role=%s: %v", id, asg.Role, err)
+			if asg != nil {
+				if err := m.registry.Start(*asg); err != nil {
+					log.Printf("[Member] start assignment failed id=%s role=%s: %v", id, asg.Role, err)
+				}
 			}
 		}
 	}

@@ -10,6 +10,7 @@ import (
 )
 
 type NodeRole struct {
+	asg models.Assignment
 	dcr DockerMgr
 	osa FileMgr
 	cms HTTPServer
@@ -17,8 +18,8 @@ type NodeRole struct {
 	reg RoleMgr
 }
 
-func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) {
-	log.Printf("[NodeRole] Starting server for node %s", a.NodeID)
+func (n *NodeRole) Run(ctx context.Context) {
+	log.Printf("[NodeRole] Starting server for node %s", n.asg.NodeID)
 	errCh := n.cms.Start()
 
 	for {
@@ -28,7 +29,7 @@ func (n *NodeRole) Run(ctx context.Context, a *models.Assignment) {
 				log.Printf("[NodeRole] HTTP server error: %v", err)
 			}
 		case <-ctx.Done():
-			log.Printf("[NodeRole] Shutting down HTTP listener for node %s", a.NodeID)
+			log.Printf("[NodeRole] Shutting down HTTP listener for node %s", n.asg.NodeID)
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), config.Timeout)
 			defer cancel()
 
@@ -110,11 +111,11 @@ func (n *NodeRole) activateMember(_ context.Context) error {
 		return fmt.Errorf("etcd connect failed: %w", err)
 	}
 	asg := NewMemberAssignment(n.osa.GetNodeID())
-	return n.reg.Start(&asg)
+	return n.reg.Start(asg)
 }
 
-func NewNodeRole(reg RoleMgr, dcr DockerMgr, osa FileMgr, cms HTTPServer, spk HealthChecker) *NodeRole {
-	n := &NodeRole{reg: reg, dcr: dcr, osa: osa, cms: cms, spk: spk}
+func NewNodeRole(asg models.Assignment, reg RoleMgr, dcr DockerMgr, osa FileMgr, cms HTTPServer, spk HealthChecker) *NodeRole {
+	n := &NodeRole{asg: asg, reg: reg, dcr: dcr, osa: osa, cms: cms, spk: spk}
 	n.cms.RegisterGetRoute("/initialize", n.handleInit)
 	n.cms.RegisterGetRoute("/logs", n.handleGetLogs)
 	n.cms.RegisterPostRoute("/assimilate", n.handleAssimilate)

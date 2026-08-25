@@ -9,11 +9,12 @@ import (
 )
 
 type LeaderRole struct {
+	asg   models.Assignment
 	store AssignmentStore
 }
 
-func (l *LeaderRole) Run(ctx context.Context, a *models.Assignment) {
-	log.Printf("[Leader] Started: %s on %s", a.ID, a.NodeID)
+func (l *LeaderRole) Run(ctx context.Context) {
+	log.Printf("[Leader] Started: %s on %s", l.asg.ID, l.asg.NodeID)
 	ch, err := l.store.SubscribeLeaderEvents(ctx)
 	if err != nil {
 		log.Printf("[Leader] Failed to subscribe to leader events: %v", err)
@@ -112,8 +113,9 @@ func NewLeaderAssignment(nodeID string) models.Assignment {
 	}
 }
 
-func NewLeaderRole(store AssignmentStore) *LeaderRole {
+func NewLeaderRole(asg models.Assignment, store AssignmentStore) *LeaderRole {
 	return &LeaderRole{
+		asg:   asg,
 		store: store,
 	}
 }

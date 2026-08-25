@@ -10,13 +10,14 @@ import (
 )
 
 type Recruiter struct {
+	asg  models.Assignment
 	str  ClusterMgr
 	ts   TSClient
 	http RpcClient
 }
 
-func (t *Recruiter) Run(ctx context.Context, a *models.Assignment) {
-	log.Printf("[TSMgr] Started: %s on %s", a.ID, a.NodeID)
+func (t *Recruiter) Run(ctx context.Context) {
+	log.Printf("[TSMgr] Started: %s on %s", t.asg.ID, t.asg.NodeID)
 	ch, err := t.str.SubscribeRecruiterEvents(ctx)
 	if err != nil {
 		log.Printf("[TSMgr] Failed to subscribe to recruiter events: %v", err)
@@ -35,7 +36,7 @@ func (t *Recruiter) Run(ctx context.Context, a *models.Assignment) {
 				log.Printf("[TSMgr] Event stream error: %v", ev.Err)
 				continue
 			}
-			if err := t.reconcile(ctx, a.NodeID); err != nil {
+			if err := t.reconcile(ctx, t.asg.NodeID); err != nil {
 				log.Println(err)
 			}
 		}
@@ -130,8 +131,9 @@ func (t *Recruiter) recruit(ctx context.Context, nodeID string, p models.TSPeer)
 	return nil
 }
 
-func NewRecruiter(str ClusterMgr, ts TSClient, http RpcClient) *Recruiter {
+func NewRecruiter(asg models.Assignment, str ClusterMgr, ts TSClient, http RpcClient) *Recruiter {
 	return &Recruiter{
+		asg:  asg,
 		str:  str,
 		ts:   ts,
 		http: http,

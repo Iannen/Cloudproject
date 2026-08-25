@@ -10,7 +10,7 @@ import (
 )
 
 type RoleRunner interface {
-	Run(ctx context.Context, asg *models.Assignment)
+	Run(ctx context.Context)
 }
 
 type Registry struct {
@@ -53,11 +53,7 @@ func (r *Registry) InitializeStore() error {
 	return r.etcd.Connect(r.ctx)
 }
 
-func (r *Registry) Start(a *models.Assignment) error {
-	if a == nil {
-		return fmt.Errorf("assignment is nil")
-	}
-
+func (r *Registry) Start(a models.Assignment) error {
 	r.mu.Lock()
 	if a.Role != "node" && r.etcd == nil {
 		r.mu.Unlock()
@@ -69,7 +65,7 @@ func (r *Registry) Start(a *models.Assignment) error {
 		return nil
 	}
 
-	rn, err := r.runner(a.Role)
+	rn, err := r.runner(a)
 	if err != nil {
 		r.mu.Unlock()
 		return err
@@ -137,37 +133,38 @@ func (r *Registry) IsActive(assignmentID string) bool {
 	return exists
 }
 
-func (r *Registry) runner(role string) (RoleRunner, error) {
-	switch role {
+func (r *Registry) runner(a models.Assignment) (RoleRunner, error) {
+	switch a.Role {
 	case "node":
-		return roles.NewNodeRole(r, r.dcr, r.osa, r.httpSrv, r.healthChecker), nil
+		return roles.NewNodeRole(a, r, r.dcr, r.osa, r.httpSrv, r.healthChecker), nil
 
 	case "member":
-		return roles.NewMemberRole(r.etcd, r), nil
+		return roles.NewMemberRole(a, r.etcd, r), nil
 
 	case "leader":
-		return roles.NewLeaderRole(r.etcd), nil
+		return roles.NewLeaderRole(a, r.etcd), nil
 
 	case "tailscale-manager":
 		return roles.NewRecruiter(
+			a,
 			r.etcd,
 			r.ts,
 			r.rpcClient,
 		), nil
 
 	default:
-		return nil, fmt.Errorf("unknown role: %s", role)
+		return nil, fmt.Errorf("unknown role: %s", a.Role)
 	}
 }
 
 type AssignmentRuntime struct {
 	AssignmentID string
-	Definition   *models.Assignment
+	Definition   models.Assignment
 	CancelFunc   context.CancelFunc
 	wg           sync.WaitGroup
 }
 
-func NewAssignmentRuntime(asg *models.Assignment) *AssignmentRuntime {
+func NewAssignmentRuntime(asg models.Assignment) *AssignmentRuntime {
 	return &AssignmentRuntime{
 		AssignmentID: asg.ID,
 		Definition:   asg,
@@ -186,7 +183,7 @@ func (r *AssignmentRuntime) Start(
 		defer r.wg.Done()
 		defer cancel()
 
-		runner.Run(ctx, r.Definition)
+		runner.Run(ctx)
 	}()
 }
 

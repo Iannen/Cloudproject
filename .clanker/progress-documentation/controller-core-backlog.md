@@ -21,22 +21,17 @@ II. Medium term goals (investigatory)
 
 [ ] Evaluate main.go with regards to its imports and workings outside of the DI. What is the idiom 
 
-[ ] Move config and models to top-level packages to decouple core from adapters:
-    go-controller/src/
-    ├── config/       <-- Shared config & adapter config structs
-    ├── models/       <-- Shared domain entities & DTOs
-    ├── core/         <-- Pure business logic & interfaces (Consumer)
-    ├── adapters/     <-- Infrastructure implementations (Supplier)
-    └── main.go       <-- Wiring & initialization (Organizer)
-
-[ ] Should the roles store the assignmentdefs they receive in Run on themselves, for ease of reference?
-
 III. Immediate Goals (consider these first)
 
-[ ] Standardize Assignment entity semantics across core domain (value vs pointer)
-    [ ] Align NewLeaderAssignment (returns value) and NewMemberAssignment (returns pointer) to value semantics
-    [ ] Align TSPeer and TSStatus to value semantics
-    [ ] Relocate Session interface definition from models/domain.go to models/session.go to align with doctrine
+[x] Standardize Assignment entity semantics across core domain (value vs pointer)
+    [x] Align NewLeaderAssignment (returns value) and NewMemberAssignment (returns pointer) to value semantics
+    [x] Align TSPeer and TSStatus to value semantics
+    [x] Relocate Session interface definition from models/domain.go to models/session.go to align with doctrine
+
+[x] Refactor roles to accept Assignment by value at construction
+    [x] Pass Assignment by value to NewRole constructors instead of passing pointers in Run()
+    [x] Remove redundant nodeID parameters from internal role execution methods. 
+    [x] Update RoleRunner and Registry interfaces to reflect value semantics
 
 IV. Idea bucket:
 

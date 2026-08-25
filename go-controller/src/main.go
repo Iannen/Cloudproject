@@ -82,7 +82,7 @@ func main() {
 		ts,
 	)
 
-	nodeAsg := &models.Assignment{
+	nodeAsg := models.Assignment{
 		NodeID: nodeID,
 		ID:     "node-" + nodeID,
 		Role:   "node",
