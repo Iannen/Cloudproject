@@ -21,6 +21,14 @@ II. Items under development:
 
 [ ] Evaluate main.go with regards to its imports and workings outside of the DI. What is the idiom 
 
+[ ] models package audit
+    [ ] models.go: are all members of the contained models used for something in codebase?
+    [ ] dto.go: look for smells 
+    [ ] events.go: look for opportunities to generalize.
+[ ] registry package: consider splitting up into registry.go and runtime.go
+    -> runtime is encapsulated by the registry, so contract outward to system should remain the same.
+    -> then look for opportunities to consolidate runtime logic into the registry, to effect a consolidation.
+
 III. Ran-into-trouble items:
 
 - Migrate encoding/json dependency from core into adapters:
