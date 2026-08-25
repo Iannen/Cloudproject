@@ -11,6 +11,15 @@ import (
 	"time"
 )
 
+type HTTPClientConfig struct {
+	Timeout              time.Duration
+	AssimilateURLPattern string
+	ActivateURLPattern   string
+	EtcdEndpoint         string
+	StartupRetries       int
+	StartupInterval      time.Duration
+}
+
 type HTTPClientAdapter struct {
 	client          *http.Client
 	assimilateURL   string
@@ -20,22 +29,16 @@ type HTTPClientAdapter struct {
 	startupInterval time.Duration
 }
 
-func NewHTTPClientAdapter(
-	timeout time.Duration,
-	assimilateURLPattern, activateURLPattern string,
-	etcdEndpoint string,
-	startupRetries int,
-	startupInterval time.Duration,
-) *HTTPClientAdapter {
+func NewHTTPClientAdapter(cfg HTTPClientConfig) *HTTPClientAdapter {
 	return &HTTPClientAdapter{
 		client: &http.Client{
-			Timeout: timeout,
+			Timeout: cfg.Timeout,
 		},
-		assimilateURL:   assimilateURLPattern,
-		activateURL:     activateURLPattern,
-		etcdEndpoint:    etcdEndpoint,
-		startupRetries:  startupRetries,
-		startupInterval: startupInterval,
+		assimilateURL:   cfg.AssimilateURLPattern,
+		activateURL:     cfg.ActivateURLPattern,
+		etcdEndpoint:    cfg.EtcdEndpoint,
+		startupRetries:  cfg.StartupRetries,
+		startupInterval: cfg.StartupInterval,
 	}
 }
 

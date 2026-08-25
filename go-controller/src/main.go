@@ -43,14 +43,14 @@ func main() {
 		AsgDefPath:          config.AsgDefPath,
 	})
 	httpSrv := adapters.NewHTTPServerAdapter(config.HTTPPort, config.Timeout)
-	httpCli := adapters.NewHTTPClientAdapter(
-		config.Timeout,
-		config.AssimilateURLPattern,
-		config.ActivateURLPattern,
-		config.EtcdEndpoint,
-		config.StartupRetries,
-		config.StartupInterval,
-	)
+	httpCli := adapters.NewHTTPClientAdapter(adapters.HTTPClientConfig{
+		Timeout:              3 * time.Second,
+		AssimilateURLPattern: "http://%s:8080/assimilate",
+		ActivateURLPattern:   "http://%s:8080/activate",
+		EtcdEndpoint:         "localhost:2379",
+		StartupRetries:       10,
+		StartupInterval:      1 * time.Second,
+	})
 	osa := adapters.NewOsAdapter(config.BootstrapDir, config.EnvFileName, config.EnvFilePerm, config.EnvTemplate)
 	ts := adapters.NewTailscaleAdapter(config.TailscaleBinary, config.TailscaleIPEnv)
 
