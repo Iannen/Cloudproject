@@ -47,12 +47,14 @@ III. Immediate Goals (consider these first)
     [x] Define OsConfig in adapters package and refactor OS adapter (os.go) constructor
     [x] Define TailscaleConfig in adapters package and refactor Tailscale adapter (tailscale.go) constructor
 
-[ ] Further porting of config members to adapter layer.
+[x] Further porting of config members to adapter layer.
     - main.go, when constructing 'StoreConfig' should not rely on config for 
         NodeAssignmentsPath: config.NodeAssignmentsPath,
 		AsgDefPath:          config.AsgDefPath,'
     - instead the prefixes should be passed to the config constructor, and concatenation should be internal to the adapter (similar to how 'PrefixHeartbeats' and 'PrefixDefs' work)
     - item limited to those two points
+
+[ ] Discuss with user how the NodeID propagation should be handled in the system. is it smelly to pass it down to the adapters from go, so that no core member need be concerned with it (we retain the option of gettning the nodeid from the adapter on-site)
 
 IV. Idea bucket:
 

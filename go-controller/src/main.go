@@ -34,10 +34,10 @@ func main() {
 		DownArgs:     []string{"down", "etcd", "--volumes", "--remove-orphans"},
 	})
 	etcd := adapters.NewStore(adapters.StoreConfig{
-		Endpoint:            etcdEndpoint,
-		Timeout:             timeout,
-		StartupInterval:     startupInterval,
-		StartupRetries:      startupRetries,
+		Endpoint:            config.EtcdEndpoint,
+		Timeout:             config.Timeout,
+		StartupInterval:     config.StartupInterval,
+		StartupRetries:      config.StartupRetries,
 		SessionTTL:          5,
 		RetryInterval:       2 * time.Second,
 		LeaderKey:           "cluster/leader",
@@ -45,8 +45,7 @@ func main() {
 		WatchReconnectDelay: 1 * time.Second,
 		PrefixHeartbeats:    "heartbeats/nodes/",
 		PrefixDefs:          "assignments/definitions/",
-		NodeAssignmentsPath: config.NodeAssignmentsPath,
-		AsgDefPath:          config.AsgDefPath,
+		PrefixNodeAsgs:      "assignments/nodes/",
 	})
 	httpSrv := adapters.NewHTTPServerAdapter(adapters.HTTPServerConfig{
 		Addr:          ":8080",

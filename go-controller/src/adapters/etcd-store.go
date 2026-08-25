@@ -36,8 +36,7 @@ type StoreConfig struct {
 	WatchReconnectDelay time.Duration
 	PrefixHeartbeats    string
 	PrefixDefs          string
-	NodeAssignmentsPath func(string) string
-	AsgDefPath          func(string) string
+	PrefixNodeAsgs      string
 }
 
 type Store struct {
@@ -81,13 +80,21 @@ func (s *Store) Connect(ctx context.Context) error {
 	return fmt.Errorf("etcd connection failed after %d retries: %w", s.cfg.StartupRetries, lastErr)
 }
 
+func (s *Store) nodeAssignmentsPath(id string) string {
+	return s.cfg.PrefixNodeAsgs + id
+}
+
+func (s *Store) asgDefPath(id string) string {
+	return s.cfg.PrefixDefs + id
+}
+
 func (s *Store) CreateAssignment(ctx context.Context, a models.Assignment) error {
 	if a.ID == "" {
 		a.ID = fmt.Sprintf("%s-%s-%d", a.Role, a.NodeID, time.Now().UnixNano()%10000)
 	}
 
-	asgDefPath := s.cfg.AsgDefPath(a.ID)
-	nodeAsgPath := s.cfg.NodeAssignmentsPath(a.NodeID)
+	asgDefPath := s.asgDefPath(a.ID)
+	nodeAsgPath := s.nodeAssignmentsPath(a.NodeID)
 
 	b, err := json.Marshal(a)
 	if err != nil {
@@ -154,7 +161,7 @@ func (s *Store) PutWithSession(ctx context.Context, sess models.Session, nodeID,
 }
 
 func (s *Store) AssignmentDef(ctx context.Context, assignmentID string) (*models.Assignment, error) {
-	asgDefPath := s.cfg.AsgDefPath(assignmentID)
+	asgDefPath := s.asgDefPath(assignmentID)
 	resp, err := s.cli.Get(ctx, asgDefPath)
 	if err != nil {
 		return nil, err
@@ -170,7 +177,7 @@ func (s *Store) AssignmentDef(ctx context.Context, assignmentID string) (*models
 }
 
 func (s *Store) NodeAssignments(ctx context.Context, nodeID string) ([]string, int64, error) {
-	nodeAsgPath := s.cfg.NodeAssignmentsPath(nodeID)
+	nodeAsgPath := s.nodeAssignmentsPath(nodeID)
 	resp, err := s.cli.Get(ctx, nodeAsgPath)
 	if err != nil {
 		return nil, 0, err
@@ -208,7 +215,7 @@ func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan mode
 		return nil, err
 	}
 
-	nodeAsgPath := s.cfg.NodeAssignmentsPath(nodeID)
+	nodeAsgPath := s.nodeAssignmentsPath(nodeID)
 	ch := make(chan models.MemberEvent, 10)
 
 	go s.runLeaderWatcher(ctx, ch)

@@ -31,9 +31,3 @@ var ClusterSpec = []models.RoleSpec{
 }
 
 func NodeID() string { return os.Getenv("NODE_ID") }
-
-func NodeHeartbeatPath(id string) string { return PrefixHeartbeats + id }
-
-func NodeAssignmentsPath(id string) string { return "assignments/nodes/" + id }
-
-func AsgDefPath(id string) string { return PrefixDefs + id }
