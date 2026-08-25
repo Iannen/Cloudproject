@@ -137,3 +137,10 @@ XXX: Consolidated Role Domain Interface Declarations into Core Roles Interfaces
     - Centralized interface definitions (`AssignmentStore`, `ParticipantStore`, `HTTPServer`, `HealthChecker`, `FileMgr`, `DockerMgr`, `RpcClient`, `ClusterMgr`, `TSClient`) inside `go-controller/src/core/roles/interfaces.go`.
     - Refactored `roles/leader.go`, `roles/member.go`, `roles/node.go`, and `roles/recruiter.go` to consume interfaces from `interfaces.go`.
     - Cleaned up redundant localized interface definitions across individual role domain files.
+
+XXXI: Refactored core/models into modular domain and DTO files
+    - Split models.go into domain.go, dto.go, events.go, and handlers.go.
+    - Moved Assignment, MemberInfo, RoleSpec, TSPeer, and Session to domain.go.
+    - Moved AssimilatePayload and TSStatus to dto.go.
+    - Grouped MemberEvent, LeaderEvent, and RecruiterEvent definitions into events.go.
+    - Moved DomainHandler function signature to handlers.go.

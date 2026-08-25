@@ -8,6 +8,6 @@ type AssimilatePayload struct {
 }
 
 type TSStatus struct {
-	Peer map[string]*TSPeer `json:"Peer"`
-	Self *TSPeer            `json:"Self"`
+	Peer map[string]TSPeer `json:"Peer"`
+	Self TSPeer            `json:"Self"`
 }

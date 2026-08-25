@@ -25,7 +25,3 @@ type TSPeer struct {
 	TailscaleIPs []string `json:"TailscaleIPs"`
 	Online       bool     `json:"Online"`
 }
-type Session interface {
-	Done() <-chan struct{}
-	Close() error
-}

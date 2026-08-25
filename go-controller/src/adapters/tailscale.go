@@ -27,7 +27,7 @@ func NewTailscaleAdapter(cfg TailscaleConfig) *TailscaleAdapter {
 	}
 }
 
-func (t *TailscaleAdapter) GetPeers(ctx context.Context) ([]*models.TSPeer, error) {
+func (t *TailscaleAdapter) GetPeers(ctx context.Context) ([]models.TSPeer, error) {
 	out, err := exec.CommandContext(ctx, t.binaryPath, "status", "--json").Output()
 	if err != nil {
 		return nil, fmt.Errorf("tailscale status: %w", err)
@@ -38,8 +38,8 @@ func (t *TailscaleAdapter) GetPeers(ctx context.Context) ([]*models.TSPeer, erro
 		return nil, fmt.Errorf("unmarshal status: %w", err)
 	}
 
-	res := make([]*models.TSPeer, 0, len(st.Peer)+1)
-	if st.Self != nil {
+	res := make([]models.TSPeer, 0, len(st.Peer)+1)
+	if st.Self.HostName != "" || len(st.Self.TailscaleIPs) > 0 {
 		res = append(res, st.Self)
 	}
 	for _, p := range st.Peer {

@@ -19,15 +19,6 @@ II. Medium term goals (investigatory)
 
 [ ] Look for commonalities of the various roles, potentially leading refactors that save characters/tokens and presents a cleaner, more solid architecture
 
-[ ] Evaluate whether the project's usage of pointers vs value is consistent & idiomatic
-    [ ] Standardize Assignment entity semantics across core domain
-        - Align NewLeaderAssignment (returns value) and NewMemberAssignment (returns pointer) constructor signatures to both return values
-            - i assess that assignmentdefs dont need mutation in this system
-        - align their usages in codebase to the value semantics 
-    [ ] Audit domain models and DTOs for value vs pointer receiver consistency
-        - Review MemberInfo vs TSPeer struct usage across Recruiter and Store interfaces
-        - Audit error event types (MemberEvent, LeaderEvent, RecruiterEvent) passed over channels
-
 [ ] Evaluate main.go with regards to its imports and workings outside of the DI. What is the idiom 
 
 [ ] Move config and models to top-level packages to decouple core from adapters:
@@ -41,6 +32,11 @@ II. Medium term goals (investigatory)
 [ ] Should the roles store the assignmentdefs they receive in Run on themselves, for ease of reference?
 
 III. Immediate Goals (consider these first)
+
+[ ] Standardize Assignment entity semantics across core domain (value vs pointer)
+    [ ] Align NewLeaderAssignment (returns value) and NewMemberAssignment (returns pointer) to value semantics
+    [ ] Align TSPeer and TSStatus to value semantics
+    [ ] Relocate Session interface definition from models/domain.go to models/session.go to align with doctrine
 
 IV. Idea bucket:
 

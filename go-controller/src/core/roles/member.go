@@ -13,8 +13,8 @@ type MemberRole struct {
 	registry RoleMgr
 }
 
-func NewMemberAssignment(nodeID string) *models.Assignment {
-	return &models.Assignment{
+func NewMemberAssignment(nodeID string) models.Assignment {
+	return models.Assignment{
 		NodeID: nodeID,
 		ID:     "member-" + nodeID,
 		Role:   "member",

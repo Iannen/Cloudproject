@@ -76,6 +76,6 @@ type ClusterMgr interface {
 }
 
 type TSClient interface {
-	GetPeers(ctx context.Context) ([]*models.TSPeer, error)
+	GetPeers(ctx context.Context) ([]models.TSPeer, error)
 	GetLocalIP(ctx context.Context) (string, error)
 }

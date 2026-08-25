@@ -75,7 +75,7 @@ func (t *Recruiter) reconcile(ctx context.Context, nodeID string) error {
 	return nil
 }
 
-func (t *Recruiter) recruit(ctx context.Context, nodeID string, p *models.TSPeer) error {
+func (t *Recruiter) recruit(ctx context.Context, nodeID string, p models.TSPeer) error {
 	ip := p.TailscaleIPs[0]
 
 	locIP, err := t.ts.GetLocalIP(ctx)

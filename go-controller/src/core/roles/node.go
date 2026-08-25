@@ -109,7 +109,8 @@ func (n *NodeRole) activateMember(_ context.Context) error {
 	if err := n.InitializeStore(); err != nil {
 		return fmt.Errorf("etcd connect failed: %w", err)
 	}
-	return n.reg.Start(NewMemberAssignment(n.osa.GetNodeID()))
+	asg := NewMemberAssignment(n.osa.GetNodeID())
+	return n.reg.Start(&asg)
 }
 
 func NewNodeRole(reg RoleMgr, dcr DockerMgr, osa FileMgr, cms HTTPServer, spk HealthChecker) *NodeRole {
