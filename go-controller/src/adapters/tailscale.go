@@ -10,15 +10,20 @@ import (
 	"strings"
 )
 
+type TailscaleConfig struct {
+	BinaryPath string
+	EnvKey     string
+}
+
 type TailscaleAdapter struct {
 	binaryPath string
 	envKey     string
 }
 
-func NewTailscaleAdapter(binaryPath, envKey string) *TailscaleAdapter {
+func NewTailscaleAdapter(cfg TailscaleConfig) *TailscaleAdapter {
 	return &TailscaleAdapter{
-		binaryPath: binaryPath,
-		envKey:     envKey,
+		binaryPath: cfg.BinaryPath,
+		envKey:     cfg.EnvKey,
 	}
 }
 

@@ -21,15 +21,18 @@ func main() {
 	defer cancel()
 
 	var timeout = 3 * time.Second
+	var bootstrapDir = "/root/bootstrap"
+	var etcdEndpoint = "localhost:2379"
+
 	docker := adapters.NewDockerAdapter(adapters.DockerConfig{
 		BinaryPath:   "docker",
-		BootstrapDir: config.BootstrapDir,
+		BootstrapDir: bootstrapDir,
 		ComposeCmd:   []string{"compose"},
 		UpArgs:       []string{"up", "-d", "etcd"},
 		DownArgs:     []string{"down", "etcd", "--volumes", "--remove-orphans"},
 	})
 	etcd := adapters.NewStore(adapters.StoreConfig{
-		Endpoint:            config.EtcdEndpoint,
+		Endpoint:            etcdEndpoint,
 		Timeout:             timeout,
 		StartupInterval:     config.StartupInterval,
 		StartupRetries:      config.StartupRetries,
@@ -51,17 +54,20 @@ func main() {
 		Timeout:              3 * time.Second,
 		AssimilateURLPattern: "http://%s:8080/assimilate",
 		ActivateURLPattern:   "http://%s:8080/activate",
-		EtcdEndpoint:         "localhost:2379",
+		EtcdEndpoint:         etcdEndpoint,
 		StartupRetries:       10,
 		StartupInterval:      1 * time.Second,
 	})
 	osa := adapters.NewOsAdapter(adapters.OsConfig{
-		BootstrapDir: config.BootstrapDir,
+		BootstrapDir: bootstrapDir,
 		EnvFileName:  ".env",
 		FilePerms:    0644,
 		EnvTemplate:  "HOSTNAME=%s\nTAILSCALE_IP=%s\nETCD_NAME=%s\nETCD_INITIAL_CLUSTER=%s\nETCD_INITIAL_CLUSTER_STATE=existing\n",
 	})
-	ts := adapters.NewTailscaleAdapter(config.TailscaleBinary, config.TailscaleIPEnv)
+	ts := adapters.NewTailscaleAdapter(adapters.TailscaleConfig{
+		BinaryPath: "tailscale",
+		EnvKey:     "TAILSCALE_IP",
+	})
 
 	reg := registry.NewRegistry(
 		ctx,
