@@ -7,7 +7,6 @@ import (
 )
 
 const (
-	ClusterLeaderKey = "cluster/leader"
 	PrefixHeartbeats = "heartbeats/nodes/"
 	PrefixDefs       = "assignments/definitions/"
 )
@@ -23,13 +22,9 @@ const (
 )
 
 const (
-	ReconcileInterval   = 3 * time.Second
-	Timeout             = 3 * time.Second
-	SessionTTL          = 5
-	StartupRetries      = 10
-	StartupInterval     = 1 * time.Second
-	RetryInterval       = 2 * time.Second
-	WatchReconnectDelay = 1 * time.Second
+	Timeout         = 3 * time.Second
+	StartupRetries  = 10
+	StartupInterval = 1 * time.Second
 )
 
 var ClusterSpec = []models.RoleSpec{

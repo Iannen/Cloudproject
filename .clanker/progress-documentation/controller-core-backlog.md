@@ -40,7 +40,7 @@ III. Immediate Goals (consider these first)
 
 [ ] Group adapter configuration into explicit structs within their respective adapter files and update constructors. Update main.go wiring per subtask completion
     [x] Define DockerConfig in adapters package and refactor docker adapter (docker.go) constructor
-    [ ] Define StoreConfig in adapters package and refactor etcd store adapter (etcd-store.go) constructor
+    [x] Define StoreConfig in adapters package and refactor etcd store adapter (etcd-store.go) constructor
     [ ] Define HTTPClientConfig in adapters package and refactor HTTP client adapter (http-client.go) constructor
     [ ] Define HTTPServerConfig in adapters package and refactor HTTP server adapter (http-server.go) constructor
     [ ] Define OsConfig in adapters package and refactor OS adapter (os.go) constructor

@@ -24,62 +24,43 @@ func (e *etcdSession) Close() error {
 	return e.sess.Close()
 }
 
-type Store struct {
-	cli                 *clientv3.Client
-	endpoint            string
-	timeout             time.Duration
-	startupInterval     time.Duration
-	startupRetries      int
-	sessionTTL          int64
-	retryInterval       time.Duration
-	leaderKey           string
-	reconcileInterval   time.Duration
-	watchReconnectDelay time.Duration
-	prefixHeartbeats    string
-	prefixDefs          string
-	nodeAssignmentsPath func(string) string
-	asgDefPath          func(string) string
+type StoreConfig struct {
+	Endpoint            string
+	Timeout             time.Duration
+	StartupInterval     time.Duration
+	StartupRetries      int
+	SessionTTL          int64
+	RetryInterval       time.Duration
+	LeaderKey           string
+	ReconcileInterval   time.Duration
+	WatchReconnectDelay time.Duration
+	PrefixHeartbeats    string
+	PrefixDefs          string
+	NodeAssignmentsPath func(string) string
+	AsgDefPath          func(string) string
 }
 
-func NewStore(
-	endpoint string,
-	timeout, startupInterval time.Duration,
-	startupRetries int,
-	sessionTTL int64,
-	retryInterval time.Duration,
-	leaderKey string,
-	reconcileInterval, watchReconnectDelay time.Duration,
-	prefixHeartbeats, prefixDefs string,
-	nodeAssignmentsPath func(string) string,
-	asgDefPath func(string) string,
-) *Store {
+type Store struct {
+	cli *clientv3.Client
+	cfg StoreConfig
+}
+
+func NewStore(cfg StoreConfig) *Store {
 	return &Store{
-		endpoint:            endpoint,
-		timeout:             timeout,
-		startupInterval:     startupInterval,
-		startupRetries:      startupRetries,
-		sessionTTL:          sessionTTL,
-		retryInterval:       retryInterval,
-		leaderKey:           leaderKey,
-		reconcileInterval:   reconcileInterval,
-		watchReconnectDelay: watchReconnectDelay,
-		prefixHeartbeats:    prefixHeartbeats,
-		prefixDefs:          prefixDefs,
-		nodeAssignmentsPath: nodeAssignmentsPath,
-		asgDefPath:          asgDefPath,
+		cfg: cfg,
 	}
 }
 
 func (s *Store) Connect(ctx context.Context) error {
 	var lastErr error
-	for i := 0; i < s.startupRetries; i++ {
+	for i := 0; i < s.cfg.StartupRetries; i++ {
 		cli, err := clientv3.New(clientv3.Config{
-			Endpoints:   []string{s.endpoint},
-			DialTimeout: s.timeout,
+			Endpoints:   []string{s.cfg.Endpoint},
+			DialTimeout: s.cfg.Timeout,
 		})
 		if err == nil {
-			sCtx, cancel := context.WithTimeout(ctx, s.timeout)
-			_, err = cli.Status(sCtx, s.endpoint)
+			sCtx, cancel := context.WithTimeout(ctx, s.cfg.Timeout)
+			_, err = cli.Status(sCtx, s.cfg.Endpoint)
 			cancel()
 			if err == nil {
 				s.cli = cli
@@ -94,10 +75,10 @@ func (s *Store) Connect(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(s.startupInterval):
+		case <-time.After(s.cfg.StartupInterval):
 		}
 	}
-	return fmt.Errorf("etcd connection failed after %d retries: %w", s.startupRetries, lastErr)
+	return fmt.Errorf("etcd connection failed after %d retries: %w", s.cfg.StartupRetries, lastErr)
 }
 
 func (s *Store) CreateAssignment(ctx context.Context, a models.Assignment) error {
@@ -105,8 +86,8 @@ func (s *Store) CreateAssignment(ctx context.Context, a models.Assignment) error
 		a.ID = fmt.Sprintf("%s-%s-%d", a.Role, a.NodeID, time.Now().UnixNano()%10000)
 	}
 
-	asgDefPath := s.asgDefPath(a.ID)
-	nodeAsgPath := s.nodeAssignmentsPath(a.NodeID)
+	asgDefPath := s.cfg.AsgDefPath(a.ID)
+	nodeAsgPath := s.cfg.NodeAssignmentsPath(a.NodeID)
 
 	b, err := json.Marshal(a)
 	if err != nil {
@@ -146,9 +127,9 @@ func (s *Store) CreateAssignment(ctx context.Context, a models.Assignment) error
 
 func (s *Store) NewSession(ctx context.Context) (models.Session, error) {
 	var err error
-	for i := 0; i < s.startupRetries; i++ {
+	for i := 0; i < s.cfg.StartupRetries; i++ {
 		var sess *concurrency.Session
-		sess, err = concurrency.NewSession(s.cli, concurrency.WithTTL(int(s.sessionTTL)), concurrency.WithContext(ctx))
+		sess, err = concurrency.NewSession(s.cli, concurrency.WithTTL(int(s.cfg.SessionTTL)), concurrency.WithContext(ctx))
 		if err == nil {
 			return &etcdSession{sess: sess}, nil
 		}
@@ -156,7 +137,7 @@ func (s *Store) NewSession(ctx context.Context) (models.Session, error) {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(s.retryInterval):
+		case <-time.After(s.cfg.RetryInterval):
 		}
 	}
 	return nil, err
@@ -167,13 +148,13 @@ func (s *Store) PutWithSession(ctx context.Context, sess models.Session, nodeID,
 	if !ok {
 		return fmt.Errorf("invalid session type provided")
 	}
-	key := s.prefixHeartbeats + nodeID
+	key := s.cfg.PrefixHeartbeats + nodeID
 	_, err := s.cli.Put(ctx, key, val, clientv3.WithLease(eSess.sess.Lease()))
 	return err
 }
 
 func (s *Store) AssignmentDef(ctx context.Context, assignmentID string) (*models.Assignment, error) {
-	asgDefPath := s.asgDefPath(assignmentID)
+	asgDefPath := s.cfg.AsgDefPath(assignmentID)
 	resp, err := s.cli.Get(ctx, asgDefPath)
 	if err != nil {
 		return nil, err
@@ -189,7 +170,7 @@ func (s *Store) AssignmentDef(ctx context.Context, assignmentID string) (*models
 }
 
 func (s *Store) NodeAssignments(ctx context.Context, nodeID string) ([]string, int64, error) {
-	nodeAsgPath := s.nodeAssignmentsPath(nodeID)
+	nodeAsgPath := s.cfg.NodeAssignmentsPath(nodeID)
 	resp, err := s.cli.Get(ctx, nodeAsgPath)
 	if err != nil {
 		return nil, 0, err
@@ -211,9 +192,9 @@ func (s *Store) ClaimLeader(ctx context.Context, sess models.Session, nodeID str
 		return false, fmt.Errorf("invalid session type provided")
 	}
 	resp, err := s.cli.Txn(ctx).
-		If(clientv3.Compare(clientv3.CreateRevision(s.leaderKey), "=", 0)).
-		Then(clientv3.OpPut(s.leaderKey, nodeID, clientv3.WithLease(eSess.sess.Lease()))).
-		Else(clientv3.OpGet(s.leaderKey)).
+		If(clientv3.Compare(clientv3.CreateRevision(s.cfg.LeaderKey), "=", 0)).
+		Then(clientv3.OpPut(s.cfg.LeaderKey, nodeID, clientv3.WithLease(eSess.sess.Lease()))).
+		Else(clientv3.OpGet(s.cfg.LeaderKey)).
 		Commit()
 	if err != nil {
 		return false, fmt.Errorf("leader election txn: %w", err)
@@ -227,7 +208,7 @@ func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan mode
 		return nil, err
 	}
 
-	nodeAsgPath := s.nodeAssignmentsPath(nodeID)
+	nodeAsgPath := s.cfg.NodeAssignmentsPath(nodeID)
 	ch := make(chan models.MemberEvent, 10)
 
 	go s.runLeaderWatcher(ctx, ch)
@@ -240,7 +221,7 @@ func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan mode
 func (s *Store) SubscribeLeaderEvents(ctx context.Context) (<-chan models.LeaderEvent, error) {
 	ch := make(chan models.LeaderEvent, 10)
 	go func() {
-		tk := time.NewTicker(s.reconcileInterval)
+		tk := time.NewTicker(s.cfg.ReconcileInterval)
 		defer tk.Stop()
 		for {
 			select {
@@ -260,7 +241,7 @@ func (s *Store) SubscribeLeaderEvents(ctx context.Context) (<-chan models.Leader
 func (s *Store) SubscribeRecruiterEvents(ctx context.Context) (<-chan models.RecruiterEvent, error) {
 	ch := make(chan models.RecruiterEvent, 10)
 	go func() {
-		tk := time.NewTicker(s.reconcileInterval)
+		tk := time.NewTicker(s.cfg.ReconcileInterval)
 		defer tk.Stop()
 		for {
 			select {
@@ -285,7 +266,7 @@ func (s *Store) notifyEvent(ch chan<- models.MemberEvent, ev models.MemberEvent)
 }
 
 func (s *Store) runLeaderWatcher(ctx context.Context, ch chan<- models.MemberEvent) {
-	wChan := s.cli.Watch(ctx, s.leaderKey)
+	wChan := s.cli.Watch(ctx, s.cfg.LeaderKey)
 	for {
 		select {
 		case <-ctx.Done():
@@ -304,7 +285,7 @@ func (s *Store) runLeaderWatcher(ctx context.Context, ch chan<- models.MemberEve
 }
 
 func (s *Store) runTicker(ctx context.Context, ch chan<- models.MemberEvent) {
-	tk := time.NewTicker(s.reconcileInterval)
+	tk := time.NewTicker(s.cfg.ReconcileInterval)
 	defer tk.Stop()
 
 	for {
@@ -322,7 +303,7 @@ func (s *Store) runAssignmentWatch(ctx context.Context, nodeAsgPath string, rev 
 		if !s.watchAssignmentLoop(ctx, nodeAsgPath, &rev, ch) {
 			return
 		}
-		t := time.NewTimer(s.watchReconnectDelay)
+		t := time.NewTimer(s.cfg.WatchReconnectDelay)
 		select {
 		case <-ctx.Done():
 			t.Stop()
@@ -365,13 +346,13 @@ func (s *Store) watchAssignmentLoop(ctx context.Context, nodeAsgPath string, rev
 }
 
 func (s *Store) GetActiveNodeIDs(ctx context.Context) ([]string, error) {
-	resp, err := s.cli.Get(ctx, s.prefixHeartbeats, clientv3.WithPrefix())
+	resp, err := s.cli.Get(ctx, s.cfg.PrefixHeartbeats, clientv3.WithPrefix())
 	if err != nil {
 		return nil, err
 	}
 	var ids []string
 	for _, kv := range resp.Kvs {
-		if id := string(kv.Key[len(s.prefixHeartbeats):]); id != "" {
+		if id := string(kv.Key[len(s.cfg.PrefixHeartbeats):]); id != "" {
 			ids = append(ids, id)
 		}
 	}
@@ -379,7 +360,7 @@ func (s *Store) GetActiveNodeIDs(ctx context.Context) ([]string, error) {
 }
 
 func (s *Store) GetAllAssignments(ctx context.Context) ([]models.Assignment, error) {
-	resp, err := s.cli.Get(ctx, s.prefixDefs, clientv3.WithPrefix())
+	resp, err := s.cli.Get(ctx, s.cfg.PrefixDefs, clientv3.WithPrefix())
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +373,6 @@ func (s *Store) GetAllAssignments(ctx context.Context) ([]models.Assignment, err
 	}
 	return asgs, nil
 }
-
 func (s *Store) AddLearner(ctx context.Context, peerURL string) (*models.MemberInfo, []models.MemberInfo, error) {
 	resp, err := s.cli.MemberAddAsLearner(ctx, []string{peerURL})
 	if err != nil {
@@ -409,7 +389,7 @@ func (s *Store) PromoteMember(ctx context.Context, id uint64) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-time.After(s.retryInterval):
+	case <-time.After(s.cfg.RetryInterval):
 	}
 	_, err := s.cli.MemberPromote(ctx, id)
 	return err

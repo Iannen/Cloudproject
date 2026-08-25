@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -26,21 +27,21 @@ func main() {
 		UpArgs:       []string{"up", "-d", "etcd"},
 		DownArgs:     []string{"down", "etcd", "--volumes", "--remove-orphans"},
 	})
-	etcd := adapters.NewStore(
-		config.EtcdEndpoint,
-		config.Timeout,
-		config.StartupInterval,
-		config.StartupRetries,
-		config.SessionTTL,
-		config.RetryInterval,
-		config.ClusterLeaderKey,
-		config.ReconcileInterval,
-		config.WatchReconnectDelay,
-		config.PrefixHeartbeats,
-		config.PrefixDefs,
-		config.NodeAssignmentsPath,
-		config.AsgDefPath,
-	)
+	etcd := adapters.NewStore(adapters.StoreConfig{
+		Endpoint:            config.EtcdEndpoint,
+		Timeout:             config.Timeout,
+		StartupInterval:     config.StartupInterval,
+		StartupRetries:      config.StartupRetries,
+		SessionTTL:          5,
+		RetryInterval:       2 * time.Second,
+		LeaderKey:           "cluster/leader",
+		ReconcileInterval:   3 * time.Second,
+		WatchReconnectDelay: 1 * time.Second,
+		PrefixHeartbeats:    "heartbeats/nodes/",
+		PrefixDefs:          "assignments/definitions/",
+		NodeAssignmentsPath: config.NodeAssignmentsPath,
+		AsgDefPath:          config.AsgDefPath,
+	})
 	httpSrv := adapters.NewHTTPServerAdapter(config.HTTPPort, config.Timeout)
 	httpCli := adapters.NewHTTPClientAdapter(
 		config.Timeout,
