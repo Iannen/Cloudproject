@@ -68,7 +68,7 @@ func (n *NodeRole) handleAssimilate(ctx context.Context, body []byte) (string, e
 		return "", fmt.Errorf("invalid payload: %w", err)
 	}
 
-	if err := n.osa.WriteEnvConfig(ctx, n.osa.GetNodeID(), p); err != nil { //TODO: simplify so that osa gets the nodeId internally (it is both supplier and consumer here, which smells)
+	if err := n.osa.WriteEnvConfig(ctx, p); err != nil {
 		return "", fmt.Errorf("config write failed: %w", err)
 	}
 
@@ -123,7 +123,7 @@ type HealthChecker interface {
 }
 type FileMgr interface {
 	GetNodeID() string
-	WriteEnvConfig(ctx context.Context, nodeID string, payload models.AssimilatePayload) error
+	WriteEnvConfig(ctx context.Context, payload models.AssimilatePayload) error
 }
 
 type DockerMgr interface {

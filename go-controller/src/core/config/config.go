@@ -6,23 +6,8 @@ import (
 )
 
 const (
-	PrefixHeartbeats = "heartbeats/nodes/"
-	PrefixDefs       = "assignments/definitions/"
-)
-
-const (
-	AssimilateURLPattern = "http://%s:8080/assimilate"
-	ActivateURLPattern   = "http://%s:8080/activate"
-	EtcdEndpoint         = "localhost:2379"
-	EtcdPeerPort         = 2380
-	NodeNamePrefix       = "kaffcloud"
-	BootstrapDir         = "/root/bootstrap"
-)
-
-const (
-	Timeout         = 3 * time.Second
-	StartupRetries  = 10
-	StartupInterval = 1 * time.Second
+	Timeout        = 3 * time.Second
+	NodeNamePrefix = "kaffcloud"
 )
 
 var ClusterSpec = []models.RoleSpec{

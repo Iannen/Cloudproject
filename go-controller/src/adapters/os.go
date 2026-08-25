@@ -36,7 +36,8 @@ func (b *OsAdapter) GetNodeID() string {
 	return os.Getenv("NODE_ID")
 }
 
-func (b *OsAdapter) WriteEnvConfig(ctx context.Context, id string, p models.AssimilatePayload) error {
+func (b *OsAdapter) WriteEnvConfig(ctx context.Context, p models.AssimilatePayload) error {
+	id := b.GetNodeID()
 	env := fmt.Sprintf(b.envTemplate, id, p.AssignedIP, id, p.EtcdInitialCluster)
 
 	return os.WriteFile(filepath.Join(b.bootstrapDir, b.envFileName), []byte(env), b.filePerms)
