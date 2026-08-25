@@ -17,8 +17,6 @@ II. Medium term goals (investigatory)
 
 [ ] Phase out core imports in acc with doctrine
 
-[ ] Categorize the models.go members appropriately into files (thinking models/domain.go models/dto.go)
-
 [ ] Look for commonalities of the various roles, potentially leading refactors that save characters/tokens and presents a cleaner, more solid architecture
 
 [ ] Evaluate whether the project's usage of pointers vs value is consistent & idiomatic
