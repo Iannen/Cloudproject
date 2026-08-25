@@ -9,6 +9,13 @@ import (
 	"path/filepath"
 )
 
+type OsConfig struct {
+	BootstrapDir string
+	EnvFileName  string
+	FilePerms    fs.FileMode
+	EnvTemplate  string
+}
+
 type OsAdapter struct {
 	bootstrapDir string
 	envFileName  string
@@ -16,12 +23,12 @@ type OsAdapter struct {
 	envTemplate  string
 }
 
-func NewOsAdapter(bootstrapDir string, envFileName string, filePerms fs.FileMode, envTemplate string) *OsAdapter {
+func NewOsAdapter(cfg OsConfig) *OsAdapter {
 	return &OsAdapter{
-		bootstrapDir: bootstrapDir,
-		envFileName:  envFileName,
-		filePerms:    filePerms,
-		envTemplate:  envTemplate,
+		bootstrapDir: cfg.BootstrapDir,
+		envFileName:  cfg.EnvFileName,
+		filePerms:    cfg.FilePerms,
+		envTemplate:  cfg.EnvTemplate,
 	}
 }
 

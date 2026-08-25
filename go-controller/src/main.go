@@ -55,7 +55,12 @@ func main() {
 		StartupRetries:       10,
 		StartupInterval:      1 * time.Second,
 	})
-	osa := adapters.NewOsAdapter(config.BootstrapDir, config.EnvFileName, config.EnvFilePerm, config.EnvTemplate)
+	osa := adapters.NewOsAdapter(adapters.OsConfig{
+		BootstrapDir: config.BootstrapDir,
+		EnvFileName:  ".env",
+		FilePerms:    0644,
+		EnvTemplate:  "HOSTNAME=%s\nTAILSCALE_IP=%s\nETCD_NAME=%s\nETCD_INITIAL_CLUSTER=%s\nETCD_INITIAL_CLUSTER_STATE=existing\n",
+	})
 	ts := adapters.NewTailscaleAdapter(config.TailscaleBinary, config.TailscaleIPEnv)
 
 	reg := registry.NewRegistry(
