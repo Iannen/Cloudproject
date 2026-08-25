@@ -12,7 +12,6 @@ const (
 )
 
 const (
-	HTTPPort             = ":8080"
 	AssimilateURLPattern = "http://%s:8080/assimilate"
 	ActivateURLPattern   = "http://%s:8080/activate"
 	EtcdEndpoint         = "localhost:2379"

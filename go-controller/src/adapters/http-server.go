@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+type HTTPServerConfig struct {
+	Addr          string
+	ClientTimeout time.Duration
+}
+
 type HTTPServerAdapter struct {
 	mux           *http.ServeMux
 	server        *http.Server
@@ -15,11 +20,11 @@ type HTTPServerAdapter struct {
 	clientTimeout time.Duration
 }
 
-func NewHTTPServerAdapter(addr string, clientTimeout time.Duration) *HTTPServerAdapter {
+func NewHTTPServerAdapter(cfg HTTPServerConfig) *HTTPServerAdapter {
 	return &HTTPServerAdapter{
 		mux:           http.NewServeMux(),
-		addr:          addr,
-		clientTimeout: clientTimeout,
+		addr:          cfg.Addr,
+		clientTimeout: cfg.ClientTimeout,
 	}
 }
 

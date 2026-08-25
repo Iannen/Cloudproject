@@ -43,7 +43,7 @@ III. Immediate Goals (consider these first)
     [x] Define DockerConfig in adapters package and refactor docker adapter (docker.go) constructor
     [x] Define StoreConfig in adapters package and refactor etcd store adapter (etcd-store.go) constructor
     [x] Define HTTPClientConfig in adapters package and refactor HTTP client adapter (http-client.go) constructor
-    [ ] Define HTTPServerConfig in adapters package and refactor HTTP server adapter (http-server.go) constructor
+    [x] Define HTTPServerConfig in adapters package and refactor HTTP server adapter (http-server.go) constructor
     [ ] Define OsConfig in adapters package and refactor OS adapter (os.go) constructor
     [ ] Define TailscaleConfig in adapters package and refactor Tailscale adapter (tailscale.go) constructor
 

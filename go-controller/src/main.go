@@ -20,6 +20,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	var timeout = 3 * time.Second
 	docker := adapters.NewDockerAdapter(adapters.DockerConfig{
 		BinaryPath:   "docker",
 		BootstrapDir: config.BootstrapDir,
@@ -29,7 +30,7 @@ func main() {
 	})
 	etcd := adapters.NewStore(adapters.StoreConfig{
 		Endpoint:            config.EtcdEndpoint,
-		Timeout:             config.Timeout,
+		Timeout:             timeout,
 		StartupInterval:     config.StartupInterval,
 		StartupRetries:      config.StartupRetries,
 		SessionTTL:          5,
@@ -42,7 +43,10 @@ func main() {
 		NodeAssignmentsPath: config.NodeAssignmentsPath,
 		AsgDefPath:          config.AsgDefPath,
 	})
-	httpSrv := adapters.NewHTTPServerAdapter(config.HTTPPort, config.Timeout)
+	httpSrv := adapters.NewHTTPServerAdapter(adapters.HTTPServerConfig{
+		Addr:          ":8080",
+		ClientTimeout: timeout,
+	})
 	httpCli := adapters.NewHTTPClientAdapter(adapters.HTTPClientConfig{
 		Timeout:              3 * time.Second,
 		AssimilateURLPattern: "http://%s:8080/assimilate",
