@@ -2,8 +2,8 @@ package adapters
 
 import (
 	"context"
+	"encoding/json"
 	"go-controller/src/core/models"
-	"io"
 	"net/http"
 	"time"
 )
@@ -28,46 +28,55 @@ func NewHTTPServerAdapter(cfg HTTPServerConfig) *HTTPServerAdapter {
 	}
 }
 
-func (s *HTTPServerAdapter) RegisterGetRoute(pattern string, handler models.DomainHandler) {
-	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		s.handleDomainRequest(w, r, handler)
-	})
-}
-
-func (s *HTTPServerAdapter) RegisterPostRoute(pattern string, handler models.DomainHandler) {
+func RegisterPost[T any](s *HTTPServerAdapter, pattern string, handler models.PayloadHandler[T]) {
 	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		s.handleDomainRequest(w, r, handler)
+
+		var payload T
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, "invalid JSON payload", http.StatusBadRequest)
+			return
+		}
+		defer r.Body.Close()
+
+		resp, err := handler(r.Context(), payload)
+		if err != nil {
+			if r.Context().Err() != nil {
+				http.Error(w, err.Error(), http.StatusRequestTimeout)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(resp))
 	})
 }
 
-func (s *HTTPServerAdapter) handleDomainRequest(w http.ResponseWriter, r *http.Request, handler models.DomainHandler) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "failed to read request body", http.StatusBadRequest)
-		return
-	}
-	defer r.Body.Close()
-
-	resp, err := handler(r.Context(), body)
-	if err != nil {
-		if r.Context().Err() != nil {
-			http.Error(w, err.Error(), http.StatusRequestTimeout)
+func RegisterGet(s *HTTPServerAdapter, pattern string, handler models.ActionHandler) {
+	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(resp))
+		resp, err := handler(r.Context())
+		if err != nil {
+			if r.Context().Err() != nil {
+				http.Error(w, err.Error(), http.StatusRequestTimeout)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(resp))
+	})
 }
 
 func (s *HTTPServerAdapter) Start() <-chan error {

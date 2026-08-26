@@ -4,4 +4,5 @@ import (
 	"context"
 )
 
-type DomainHandler func(ctx context.Context, body []byte) (string, error)
+type PayloadHandler[T any] func(ctx context.Context, payload T) (string, error)
+type ActionHandler func(ctx context.Context) (string, error)

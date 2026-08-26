@@ -31,11 +31,7 @@ II. Items under development:
 
 III. Ran-into-trouble items:
 
-- Migrate encoding/json dependency from core into adapters:
-    - For routes with a request body, 'Node.go' route registration use arguments 'route string', 'node handler method' and 'domain model type', so that they can receive deserialized domain model object from the adapter/itf.
-    - The challenge is passing the type information needed for deserialization. 
-
-IV. Pending items
+IV. Purported actionable items
 
 V. Idea bucket:
 

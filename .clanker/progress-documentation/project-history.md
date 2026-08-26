@@ -151,3 +151,9 @@ XXXII: Value semantics standardized for Assignment across core models and role e
     - Relocated Session interface definition to models/interfaces.go to align core package structure with project doctrine.
     - Refactored role constructors (NewNodeRole, NewMemberRole, NewLeaderRole, NewRecruiter) and Registry runners to pass Assignment definitions by value.
     - Simplified role execution methods by removing redundant nodeID parameters.
+
+XXXIII: Migrated encoding/json dependency and HTTP bindings from core into adapters
+    - Refactored core handler signatures into generic PayloadHandler[T] and ActionHandler in core/models/handlers.go.
+    - Implemented package-level generic registration functions (RegisterPost[T], RegisterGet) in the HTTP adapter.
+    - Decoupled HTTP server lifecycle from NodeRole, moving wiring and server management to the composition root (main.go).
+    - Achieved a lean, protocol-agnostic core layer fully compliant with project doctrine.

@@ -73,12 +73,22 @@ func (c *HTTPClientAdapter) Assimilate(ctx context.Context, targetIP string, pay
 	return nil
 }
 
-func (c *HTTPClientAdapter) Activate(ctx context.Context, targetIP string) error {
-	url := fmt.Sprintf(c.activateURL, targetIP)
-	if !c.Post(ctx, url, nil) {
-		return fmt.Errorf("failed to post activate request to %s", url)
+func (h *HTTPClientAdapter) Activate(ctx context.Context, targetIP string) error {
+	url := fmt.Sprintf(h.activateURL, targetIP)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create activate request: %w", err)
 	}
 
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send activate request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("activate returned status: %s", resp.Status)
+	}
 	return nil
 }
 

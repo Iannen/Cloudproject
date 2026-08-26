@@ -18,7 +18,6 @@ type Registry struct {
 	mu            sync.Mutex
 	dcr           roles.DockerMgr
 	etcd          roles.StoreAdapter
-	httpSrv       roles.HTTPServer
 	healthChecker roles.HealthChecker
 	rpcClient     roles.RpcClient
 	osa           roles.FileMgr
@@ -30,7 +29,6 @@ func NewRegistry(
 	ctx context.Context,
 	docker roles.DockerMgr,
 	etcd roles.StoreAdapter,
-	httpSrv roles.HTTPServer,
 	healthChecker roles.HealthChecker,
 	rpcClient roles.RpcClient,
 	osa roles.FileMgr,
@@ -40,7 +38,6 @@ func NewRegistry(
 		ctx:           ctx,
 		dcr:           docker,
 		etcd:          etcd,
-		httpSrv:       httpSrv,
 		healthChecker: healthChecker,
 		rpcClient:     rpcClient,
 		osa:           osa,
@@ -136,7 +133,7 @@ func (r *Registry) IsActive(assignmentID string) bool {
 func (r *Registry) runner(a models.Assignment) (RoleRunner, error) {
 	switch a.Role {
 	case "node":
-		return roles.NewNodeRole(a, r, r.dcr, r.osa, r.httpSrv, r.healthChecker), nil
+		return roles.NewNodeRole(a, r, r.dcr, r.osa, r.healthChecker), nil
 
 	case "member":
 		return roles.NewMemberRole(a, r.etcd, r), nil

@@ -5,6 +5,7 @@ import (
 	"go-controller/src/adapters"
 	"go-controller/src/core/models"
 	"go-controller/src/core/registry"
+	"go-controller/src/core/roles"
 	"log"
 	"os"
 	"os/signal"
@@ -75,7 +76,6 @@ func main() {
 		ctx,
 		docker,
 		etcd,
-		httpSrv,
 		httpCli,
 		httpCli,
 		osa,
@@ -92,11 +92,30 @@ func main() {
 		log.Fatalf("[Main] Failed to start base node role: %v", err)
 	}
 
+	nodeRole := roles.NewNodeRole(nodeAsg, reg, docker, osa, httpCli)
+	adapters.RegisterGet(httpSrv, "/initialize", nodeRole.HandleInit)
+	adapters.RegisterGet(httpSrv, "/logs", nodeRole.HandleGetLogs)
+	adapters.RegisterGet(httpSrv, "/activate", nodeRole.HandleActivate)
+	adapters.RegisterPost(httpSrv, "/assimilate", nodeRole.HandleAssimilate)
+
+	errCh := httpSrv.Start()
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
 
-	log.Println("[Main] Shutting down node...")
+	select {
+	case err := <-errCh:
+		log.Printf("[Main] HTTP server error: %v", err)
+	case <-sigChan:
+		log.Println("[Main] Shutting down node...")
+	}
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), timeout)
+	defer shutdownCancel()
+	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("[Main] Error shutting down HTTP server: %v", err)
+	}
+
 	reg.StopAll()
 	cancel()
 

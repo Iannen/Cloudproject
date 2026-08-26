@@ -40,13 +40,6 @@ type ParticipantStore interface {
 	SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.MemberEvent, error)
 }
 
-type HTTPServer interface {
-	RegisterGetRoute(pattern string, handler models.DomainHandler)
-	RegisterPostRoute(pattern string, handler models.DomainHandler)
-	Start() <-chan error
-	Shutdown(ctx context.Context) error
-}
-
 type HealthChecker interface {
 	WaitEtcdReady(ctx context.Context) error
 }
