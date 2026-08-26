@@ -43,27 +43,9 @@ IV. Purported actionable items:
         - It should be aware if the host is 'active' or not, in the sense of beeing part of a cloud or not.
             - currently it has the ability become a cloud member by either starting a cloud ('initialize') or joining a cloud ('handleAssimilate' and 'handleActivate in tandem)
 
-[ ] Decouple core models from serialization by implementing adapter-local DTOs
-    [ ] Scrub JSON and serialization tags from all structs in core/models/
-        - Remove json struct tags from Assignment, TSPeer, and other core models
-    [ ] Create adapter-local DTOs and mappers for HTTP and Tailscale adapters
-        - Define tagged DTO structs inside adapters package and write explicit mapping functions
-    [ ] Update Store adapter to handle persistence mapping independently of core domain models
-        - Ensure etcd serialization uses adapter-local representations or direct primitives
-
-[x] Refactor etcd readiness check from HTTP client to Docker adapter
-    [x] 'WaitEtcdReady' implementation from adapters.HttpClientAdapter to adapters.DockerAdapter
-    [x] add 'WaitEtcdReady' to roles.DockerMgr interface
-    [x] remove obsolete 'HealthChecker' interface
-    [x] Update dependency injection wiring in main.go 
-    [x] Align registry.go as required
-    [x] Update call sites inside node.go to use the docker interface
-
 V. Idea bucket:
 
 VI. Bugs:
 
 VII. Purported wisdom, for evaluation:
-
--Control Flow Direction Flaws in main.go: In hexagonal architecture, the driving side (primary adapters like HTTP handlers) should invoke core/application use cases. Here, HTTP handlers are mapped directly to methods on roles.NodeRole, which bypasses a clean application service or use-case layer, muddying the entry point boundaries.
 

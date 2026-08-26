@@ -1,13 +1,13 @@
 package models
 
 type AssimilatePayload struct {
-	LeaderName         string `json:"leader_name"`
-	LeaderPeerURL      string `json:"leader_peer_url"`
-	EtcdInitialCluster string `json:"etcd_initial_cluster"`
-	AssignedIP         string `json:"assigned_ip"`
+	LeaderName         string
+	LeaderPeerURL      string
+	EtcdInitialCluster string
+	AssignedIP         string
 }
 
 type TSStatus struct {
-	Peer map[string]TSPeer `json:"Peer"`
-	Self TSPeer            `json:"Self"`
+	Peer map[string]TSPeer
+	Self TSPeer
 }

@@ -1,10 +1,10 @@
 package models
 
 type Assignment struct {
-	NodeID string `json:"node_id"`
-	ID     string `json:"id"`
-	Role   string `json:"role"`
-	Config string `json:"config"`
+	NodeID string
+	ID     string
+	Role   string
+	Config string
 }
 
 type MemberInfo struct {
@@ -17,7 +17,7 @@ type RoleSpec struct {
 	Replicas int
 }
 type TSPeer struct {
-	HostName     string   `json:"HostName"`
-	TailscaleIPs []string `json:"TailscaleIPs"`
-	Online       bool     `json:"Online"`
+	HostName     string
+	TailscaleIPs []string
+	Online       bool
 }
