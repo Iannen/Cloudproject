@@ -34,6 +34,11 @@ func (m *MemberRole) Run(ctx context.Context) {
 	nodeID := m.asg.NodeID
 	log.Println("[Member] Member role starting ")
 
+	if err := m.store.Connect(ctx); err != nil {
+		log.Printf("[Member] Failed to connect store: %v", err)
+		return
+	}
+
 	for {
 		if ctx.Err() != nil {
 			log.Printf("[Member] Stopping member role loop: %v", ctx.Err())

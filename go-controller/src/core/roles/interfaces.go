@@ -13,14 +13,12 @@ type RoleMgr interface {
 	StopManagedAssignments()
 	ActiveAssignments() map[string]bool
 	IsActive(assignmentID string) bool
-	InitializeStore() error
 }
 
 type StoreAdapter interface {
 	AssignmentStore
 	ParticipantStore
 	ClusterMgr
-	Connect(ctx context.Context) error
 }
 
 type AssignmentStore interface {
@@ -38,6 +36,7 @@ type ParticipantStore interface {
 	PutWithSession(ctx context.Context, sess models.Session, nodeID string, value string) error
 	ClaimLeader(ctx context.Context, sess models.Session, nodeID string) (bool, error)
 	SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.MemberEvent, error)
+	Connect(ctx context.Context) error
 }
 
 type FileMgr interface {

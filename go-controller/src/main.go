@@ -82,7 +82,10 @@ func main() {
 		ts,
 	)
 
-	rpcHandler := roles.NewRPCHandler(reg, docker, osa)
+	memberAsg := roles.NewMemberAssignment(nodeID)
+	memberRole := roles.NewMemberRole(memberAsg, etcd, reg)
+
+	rpcHandler := roles.NewRPCHandler(ctx, memberRole, docker, osa)
 	adapters.RegisterGet(httpSrv, "/initialize", rpcHandler.HandleInit)
 	adapters.RegisterGet(httpSrv, "/logs", rpcHandler.HandleGetLogs)
 	adapters.RegisterGet(httpSrv, "/activate", rpcHandler.HandleActivate)

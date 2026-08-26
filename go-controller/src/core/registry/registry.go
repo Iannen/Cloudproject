@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"go-controller/src/core/models"
 	"go-controller/src/core/roles"
-	"strings"
 	"sync"
 )
 
@@ -14,7 +13,7 @@ type RoleRunner interface {
 }
 
 type Registry struct {
-	ctx       context.Context
+	appCtx    context.Context
 	mu        sync.Mutex
 	dcr       roles.DockerMgr
 	etcd      roles.StoreAdapter
@@ -25,16 +24,16 @@ type Registry struct {
 }
 
 func NewRegistry(
-	ctx context.Context,
-	docker roles.DockerMgr,
+	appCtx context.Context,
+	dcr roles.DockerMgr,
 	etcd roles.StoreAdapter,
 	rpcClient roles.RpcClient,
 	osa roles.FileMgr,
 	ts roles.TSClient,
 ) *Registry {
 	return &Registry{
-		ctx:       ctx,
-		dcr:       docker,
+		appCtx:    appCtx,
+		dcr:       dcr,
 		etcd:      etcd,
 		rpcClient: rpcClient,
 		osa:       osa,
@@ -43,13 +42,9 @@ func NewRegistry(
 	}
 }
 
-func (r *Registry) InitializeStore() error {
-	return r.etcd.Connect(r.ctx)
-}
-
 func (r *Registry) Start(a models.Assignment) error {
 	r.mu.Lock()
-	if a.Role != "node" && r.etcd == nil {
+	if r.etcd == nil {
 		r.mu.Unlock()
 		return fmt.Errorf("store not initialized")
 	}
@@ -69,7 +64,7 @@ func (r *Registry) Start(a models.Assignment) error {
 	r.runtimes[a.ID] = rt
 	r.mu.Unlock()
 
-	rt.Start(r.ctx, rn)
+	rt.Start(r.appCtx, rn)
 	return nil
 }
 
@@ -112,9 +107,6 @@ func (r *Registry) ActiveAssignments() map[string]bool {
 	defer r.mu.Unlock()
 	active := make(map[string]bool, len(r.runtimes))
 	for id := range r.runtimes {
-		if strings.HasPrefix(id, "member-") {
-			continue
-		}
 		active[id] = true
 	}
 	return active
@@ -129,9 +121,6 @@ func (r *Registry) IsActive(assignmentID string) bool {
 
 func (r *Registry) runner(a models.Assignment) (RoleRunner, error) {
 	switch a.Role {
-
-	case "member":
-		return roles.NewMemberRole(a, r.etcd, r), nil
 
 	case "leader":
 		return roles.NewLeaderRole(a, r.etcd), nil

@@ -4,19 +4,27 @@ import (
 	"context"
 	"fmt"
 	"go-controller/src/core/models"
+	"sync"
 )
 
 type RPCHandler struct {
-	dcr DockerMgr
-	osa FileMgr
-	reg RoleMgr
+	appCtx     context.Context
+	dcr        DockerMgr
+	osa        FileMgr
+	memberRole *MemberRole
+	mu         sync.Mutex
+	started    bool
 }
 
 func (h *RPCHandler) HandleInit(ctx context.Context) (string, error) {
 	id := h.osa.GetNodeID()
-	if h.reg.IsActive("member-" + id) {
+
+	h.mu.Lock()
+	if h.started {
+		h.mu.Unlock()
 		return fmt.Sprintf("Node %s already initialized.\n", id), nil
 	}
+	h.mu.Unlock()
 
 	_ = h.dcr.ResetEtcd(ctx)
 	if err := h.dcr.StartEtcd(ctx); err != nil {
@@ -69,13 +77,26 @@ func (h *RPCHandler) HandleGetLogs(ctx context.Context) (string, error) {
 }
 
 func (h *RPCHandler) activateMember(_ context.Context) error {
-	if err := h.reg.InitializeStore(); err != nil {
-		return fmt.Errorf("etcd connect failed: %w", err)
+	h.mu.Lock()
+	if h.started {
+		h.mu.Unlock()
+		return nil
 	}
-	asg := NewMemberAssignment(h.osa.GetNodeID())
-	return h.reg.Start(asg)
+	h.started = true
+	h.mu.Unlock()
+
+	go func() {
+		h.memberRole.Run(h.appCtx)
+	}()
+
+	return nil
 }
 
-func NewRPCHandler(reg RoleMgr, dcr DockerMgr, osa FileMgr) *RPCHandler {
-	return &RPCHandler{reg: reg, dcr: dcr, osa: osa}
+func NewRPCHandler(ctx context.Context, memberRole *MemberRole, dcr DockerMgr, osa FileMgr) *RPCHandler {
+	return &RPCHandler{
+		appCtx:     ctx,
+		memberRole: memberRole,
+		dcr:        dcr,
+		osa:        osa,
+	}
 }

@@ -162,3 +162,19 @@ XXXIV: Refactored etcd readiness check and transferred completion state
     - Migrated WaitEtcdReady implementation from adapters.HttpClientAdapter to adapters.DockerAdapter.
     - Added WaitEtcdReady to roles.DockerMgr interface, removed obsolete HealthChecker interface, and updated main.go dependency injection.
     - Updated call sites inside node.go to use the docker interface instead of HTTP clients.
+
+XXXV: Decoupled node.go and removed registry references from role management
+    - Decoupled `node.go` from the registry and removed all references to node roles from the registry package.
+    - Renamed `NodeRole` to `RPCHandler` and removed its unused `Run` method.
+    - Handled `RPCHandler` instantiation and management directly within `main.go`.
+
+XXXVI: Made RPCHandler handle the member role independently
+    - Instantiated `MemberRole` directly in `main.go` with required dependencies and passed it into `RPCHandler`.
+    - Removed the RoleMgr (registry) reference entirely from `RPCHandler`.
+    - Added a mutex, context cancel function, and wait group to `RPCHandler` for thread-safe member role lifecycle tracking and safe one-time goroutine startup.
+    - Removed member-specific case logic and prefixes from the registry package, re-aligning it exclusively to dynamic Tier 3 workloads.
+
+XXXVII: Redesigned role lifecycle architecture into a 3-tier hierarchy
+    - Established Tier 1 (`RPCHandler`) as the host process maintained directly by `main.go` and exempt from the registry.
+    - Established Tier 2 (`MemberRole`) managed directly by `RPCHandler` to handle etcd sessions and elections.
+    - Established Tier 3 (Dynamic Roles) managed exclusively by `MemberRole` via the registry to eliminate circular self-management.
