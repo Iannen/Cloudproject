@@ -76,12 +76,8 @@ func (n *NodeRole) HandleGetLogs(ctx context.Context) (string, error) {
 	return logs, nil
 }
 
-func (n *NodeRole) InitializeStore() error {
-	return n.reg.InitializeStore()
-}
-
 func (n *NodeRole) activateMember(_ context.Context) error {
-	if err := n.InitializeStore(); err != nil {
+	if err := n.reg.InitializeStore(); err != nil {
 		return fmt.Errorf("etcd connect failed: %w", err)
 	}
 	asg := NewMemberAssignment(n.osa.GetNodeID())
