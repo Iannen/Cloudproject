@@ -9,8 +9,6 @@ II. Items under development:
 
 [ ] Add etcd status endpoint, for easy and comprehensive diagnostics of etcd related issues
 
-[ ] Phase out core imports in acc with doctrine
-
 [ ] Look for commonalities of the various roles, potentially leading refactors that save characters/tokens and presents a cleaner, more solid architecture
 
 [ ] Evaluate main.go with regards to its imports and workings outside of the DI. What is the idiom 
