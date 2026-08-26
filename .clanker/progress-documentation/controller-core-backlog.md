@@ -51,13 +51,13 @@ IV. Purported actionable items:
     [ ] Update Store adapter to handle persistence mapping independently of core domain models
         - Ensure etcd serialization uses adapter-local representations or direct primitives
 
-[ ] Refactor etcd readiness check from HTTP client to Docker adapter
-    [ ] 'WaitEtcdReady' implementation from adapters.HttpClientAdapter to adapters.DockerAdapter
-    [ ] add 'WaitEtcdReady' to roles.DockerMgr interface
-    [ ] remove obsolete 'HealthChecker' interface
-    [ ] Update dependency injection wiring in main.go 
-    [ ] Align registry.go as required
-    [ ] Update call sites inside node.go to use the docker interface
+[x] Refactor etcd readiness check from HTTP client to Docker adapter
+    [x] 'WaitEtcdReady' implementation from adapters.HttpClientAdapter to adapters.DockerAdapter
+    [x] add 'WaitEtcdReady' to roles.DockerMgr interface
+    [x] remove obsolete 'HealthChecker' interface
+    [x] Update dependency injection wiring in main.go 
+    [x] Align registry.go as required
+    [x] Update call sites inside node.go to use the docker interface
 
 V. Idea bucket:
 

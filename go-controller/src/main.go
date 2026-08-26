@@ -28,17 +28,19 @@ func main() {
 	})
 
 	nodeID := osa.GetNodeID()
-	log.Printf("[Main] Starting node with ID: %s", nodeID)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	docker := adapters.NewDockerAdapter(adapters.DockerConfig{
-		BinaryPath:   "docker",
-		BootstrapDir: bootstrapDir,
-		ComposeCmd:   []string{"compose"},
-		UpArgs:       []string{"up", "-d", "etcd"},
-		DownArgs:     []string{"down", "etcd", "--volumes", "--remove-orphans"},
+		BinaryPath:      "docker",
+		BootstrapDir:    bootstrapDir,
+		ComposeCmd:      []string{"compose"},
+		UpArgs:          []string{"up", "-d", "etcd"},
+		DownArgs:        []string{"down", "etcd", "--volumes", "--remove-orphans"},
+		StartupRetries:  startupRetries,
+		StartupInterval: startupInterval,
+		EtcdEndpoint:    etcdEndpoint,
 	})
 	etcd := adapters.NewStore(adapters.StoreConfig{
 		NodeID:              nodeID,
@@ -77,7 +79,6 @@ func main() {
 		docker,
 		etcd,
 		httpCli,
-		httpCli,
 		osa,
 		ts,
 	)
@@ -88,21 +89,17 @@ func main() {
 		Role:   "node",
 	}
 
-	if err := reg.Start(nodeAsg); err != nil {
-		log.Fatalf("[Main] Failed to start base node role: %v", err)
-	}
-
-	nodeRole := roles.NewNodeRole(nodeAsg, reg, docker, osa, httpCli)
+	nodeRole := roles.NewNodeRole(nodeAsg, reg, docker, osa)
 	adapters.RegisterGet(httpSrv, "/initialize", nodeRole.HandleInit)
 	adapters.RegisterGet(httpSrv, "/logs", nodeRole.HandleGetLogs)
 	adapters.RegisterGet(httpSrv, "/activate", nodeRole.HandleActivate)
 	adapters.RegisterPost(httpSrv, "/assimilate", nodeRole.HandleAssimilate)
 
 	errCh := httpSrv.Start()
+	log.Printf("[Main] %s is initialized", nodeID)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
 	select {
 	case err := <-errCh:
 		log.Printf("[Main] HTTP server error: %v", err)

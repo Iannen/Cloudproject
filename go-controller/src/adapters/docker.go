@@ -3,16 +3,21 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"net"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 type DockerConfig struct {
-	BinaryPath   string
-	BootstrapDir string
-	ComposeCmd   []string
-	UpArgs       []string
-	DownArgs     []string
+	BinaryPath      string
+	BootstrapDir    string
+	ComposeCmd      []string
+	UpArgs          []string
+	DownArgs        []string
+	StartupRetries  int
+	StartupInterval time.Duration
+	EtcdEndpoint    string
 }
 
 type DockerAdapter struct {
@@ -53,4 +58,21 @@ func (d *DockerAdapter) GetLogs(ctx context.Context, containerID string) (string
 		return "", fmt.Errorf("docker logs %s failed: %w (%s)", containerID, err, out)
 	}
 	return string(out), nil
+}
+
+func (c *DockerAdapter) WaitEtcdReady(ctx context.Context) error {
+	for i := 0; i < c.cfg.StartupRetries; i++ {
+		conn, err := net.DialTimeout("tcp", c.cfg.EtcdEndpoint, c.cfg.StartupInterval)
+		if err == nil {
+			_ = conn.Close()
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(c.cfg.StartupInterval):
+		}
+	}
+	return fmt.Errorf("etcd endpoint %s not ready after %d retries", c.cfg.EtcdEndpoint, c.cfg.StartupRetries)
 }

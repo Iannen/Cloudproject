@@ -14,35 +14,32 @@ type RoleRunner interface {
 }
 
 type Registry struct {
-	ctx           context.Context
-	mu            sync.Mutex
-	dcr           roles.DockerMgr
-	etcd          roles.StoreAdapter
-	healthChecker roles.HealthChecker
-	rpcClient     roles.RpcClient
-	osa           roles.FileMgr
-	ts            roles.TSClient
-	runtimes      map[string]*AssignmentRuntime
+	ctx       context.Context
+	mu        sync.Mutex
+	dcr       roles.DockerMgr
+	etcd      roles.StoreAdapter
+	rpcClient roles.RpcClient
+	osa       roles.FileMgr
+	ts        roles.TSClient
+	runtimes  map[string]*AssignmentRuntime
 }
 
 func NewRegistry(
 	ctx context.Context,
 	docker roles.DockerMgr,
 	etcd roles.StoreAdapter,
-	healthChecker roles.HealthChecker,
 	rpcClient roles.RpcClient,
 	osa roles.FileMgr,
 	ts roles.TSClient,
 ) *Registry {
 	return &Registry{
-		ctx:           ctx,
-		dcr:           docker,
-		etcd:          etcd,
-		healthChecker: healthChecker,
-		rpcClient:     rpcClient,
-		osa:           osa,
-		ts:            ts,
-		runtimes:      make(map[string]*AssignmentRuntime),
+		ctx:       ctx,
+		dcr:       docker,
+		etcd:      etcd,
+		rpcClient: rpcClient,
+		osa:       osa,
+		ts:        ts,
+		runtimes:  make(map[string]*AssignmentRuntime),
 	}
 }
 
@@ -132,8 +129,6 @@ func (r *Registry) IsActive(assignmentID string) bool {
 
 func (r *Registry) runner(a models.Assignment) (RoleRunner, error) {
 	switch a.Role {
-	case "node":
-		return roles.NewNodeRole(a, r, r.dcr, r.osa, r.healthChecker), nil
 
 	case "member":
 		return roles.NewMemberRole(a, r.etcd, r), nil

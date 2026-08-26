@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-controller/src/core/models"
-	"net"
 	"net/http"
 	"time"
 )
@@ -40,23 +39,6 @@ func NewHTTPClientAdapter(cfg HTTPClientConfig) *HTTPClientAdapter {
 		startupRetries:  cfg.StartupRetries,
 		startupInterval: cfg.StartupInterval,
 	}
-}
-
-func (c *HTTPClientAdapter) WaitEtcdReady(ctx context.Context) error {
-	for i := 0; i < c.startupRetries; i++ {
-		conn, err := net.DialTimeout("tcp", c.etcdEndpoint, c.startupInterval)
-		if err == nil {
-			_ = conn.Close()
-			return nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(c.startupInterval):
-		}
-	}
-	return fmt.Errorf("etcd endpoint %s not ready after %d retries", c.etcdEndpoint, c.startupRetries)
 }
 
 func (c *HTTPClientAdapter) Assimilate(ctx context.Context, targetIP string, payload models.AssimilatePayload) error {

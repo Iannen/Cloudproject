@@ -11,7 +11,6 @@ type NodeRole struct {
 	asg models.Assignment
 	dcr DockerMgr
 	osa FileMgr
-	spk HealthChecker
 	reg RoleMgr
 }
 
@@ -31,7 +30,7 @@ func (n *NodeRole) HandleInit(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("etcd start failed: %w", err)
 	}
 
-	if err := n.spk.WaitEtcdReady(ctx); err != nil {
+	if err := n.dcr.WaitEtcdReady(ctx); err != nil {
 		return "", fmt.Errorf("etcd ready check failed: %w", err)
 	}
 
@@ -52,7 +51,7 @@ func (n *NodeRole) HandleAssimilate(ctx context.Context, p models.AssimilatePayl
 		return "", fmt.Errorf("etcd start failed: %w", err)
 	}
 
-	if err := n.spk.WaitEtcdReady(ctx); err != nil {
+	if err := n.dcr.WaitEtcdReady(ctx); err != nil {
 		if ctx.Err() != nil {
 			return "", fmt.Errorf("timeout: %w", ctx.Err())
 		}
@@ -84,6 +83,6 @@ func (n *NodeRole) activateMember(_ context.Context) error {
 	return n.reg.Start(asg)
 }
 
-func NewNodeRole(asg models.Assignment, reg RoleMgr, dcr DockerMgr, osa FileMgr, spk HealthChecker) *NodeRole {
-	return &NodeRole{asg: asg, reg: reg, dcr: dcr, osa: osa, spk: spk}
+func NewNodeRole(asg models.Assignment, reg RoleMgr, dcr DockerMgr, osa FileMgr) *NodeRole {
+	return &NodeRole{asg: asg, reg: reg, dcr: dcr, osa: osa}
 }

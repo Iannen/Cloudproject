@@ -40,10 +40,6 @@ type ParticipantStore interface {
 	SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.MemberEvent, error)
 }
 
-type HealthChecker interface {
-	WaitEtcdReady(ctx context.Context) error
-}
-
 type FileMgr interface {
 	GetNodeID() string
 	WriteEnvConfig(ctx context.Context, payload models.AssimilatePayload) error
@@ -52,6 +48,7 @@ type FileMgr interface {
 type DockerMgr interface {
 	StartEtcd(ctx context.Context) error
 	ResetEtcd(ctx context.Context) error
+	WaitEtcdReady(ctx context.Context) error
 	GetLogs(ctx context.Context, containerID string) (string, error)
 }
 

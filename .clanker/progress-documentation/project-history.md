@@ -157,3 +157,8 @@ XXXIII: Migrated encoding/json dependency and HTTP bindings from core into adapt
     - Implemented package-level generic registration functions (RegisterPost[T], RegisterGet) in the HTTP adapter.
     - Decoupled HTTP server lifecycle from NodeRole, moving wiring and server management to the composition root (main.go).
     - Achieved a lean, protocol-agnostic core layer fully compliant with project doctrine.
+
+XXXIV: Refactored etcd readiness check and transferred completion state
+    - Migrated WaitEtcdReady implementation from adapters.HttpClientAdapter to adapters.DockerAdapter.
+    - Added WaitEtcdReady to roles.DockerMgr interface, removed obsolete HealthChecker interface, and updated main.go dependency injection.
+    - Updated call sites inside node.go to use the docker interface instead of HTTP clients.
