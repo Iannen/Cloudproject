@@ -34,14 +34,18 @@ III. Ran-into-trouble items:
 
 IV. Purported actionable items:
 
-[ ] Refactor node.go and decouple it from  the registry
-    [ ] Remove all references to noderole from the registry
-    [ ] Rename 'NodeRole' into something to do with 'RPCHandler' (im sure there is a better name here, but lets go with that for now)
-    [ ] Remove the unused Run method from RPCHandler and have main.go instantiate and manage it directly
-    [ ] The responsibilities of 'RPCHandler' become
-        - Generally to receive and handle all rpc (the adapter serving as a transport to which RPCHandler is agnostic)
-        - It should be aware if the host is 'active' or not, in the sense of beeing part of a cloud or not.
-            - currently it has the ability become a cloud member by either starting a cloud ('initialize') or joining a cloud ('handleAssimilate' and 'handleActivate in tandem)
+[x] Refactor node.go and decouple it from  the registry
+    [x] Remove all references to noderole from the registry
+    [x] Rename 'NodeRole' into something to do with 'RPCHandler' (im sure there is a better name here, but lets go with that for now)
+    [x] Remove the unused Run method from RPCHandler and have main.go instantiate and manage it directly
+
+[ ] Make RPCHandler handle the member role without relying on the registry
+    [ ] Instantiate MemberRole in main.go with its required dependencies (Store, Registry/Workload Killer) and pass it into RPCHandler
+    [ ] Remove the RoleMgr (registry) reference entirely from RPCHandler
+    [ ] Add a mutex, context cancel function, and wait group to RPCHandler for thread-safe member role lifecycle tracking
+    [ ] Update init and activate paths in RPCHandler to safely start the MemberRole goroutine once
+    [ ] Remove "member" case logic and member prefix filters (e.g., "member-") from the registry package
+    [ ] Re-align the registry to exclusively manage Tier 3 dynamic workloads driven downstream by the MemberRole
 
 V. Idea bucket:
 

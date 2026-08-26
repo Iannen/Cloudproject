@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"go-controller/src/adapters"
-	"go-controller/src/core/models"
 	"go-controller/src/core/registry"
 	"go-controller/src/core/roles"
 	"log"
@@ -83,17 +82,11 @@ func main() {
 		ts,
 	)
 
-	nodeAsg := models.Assignment{
-		NodeID: nodeID,
-		ID:     "node-" + nodeID,
-		Role:   "node",
-	}
-
-	nodeRole := roles.NewNodeRole(nodeAsg, reg, docker, osa)
-	adapters.RegisterGet(httpSrv, "/initialize", nodeRole.HandleInit)
-	adapters.RegisterGet(httpSrv, "/logs", nodeRole.HandleGetLogs)
-	adapters.RegisterGet(httpSrv, "/activate", nodeRole.HandleActivate)
-	adapters.RegisterPost(httpSrv, "/assimilate", nodeRole.HandleAssimilate)
+	rpcHandler := roles.NewRPCHandler(reg, docker, osa)
+	adapters.RegisterGet(httpSrv, "/initialize", rpcHandler.HandleInit)
+	adapters.RegisterGet(httpSrv, "/logs", rpcHandler.HandleGetLogs)
+	adapters.RegisterGet(httpSrv, "/activate", rpcHandler.HandleActivate)
+	adapters.RegisterPost(httpSrv, "/assimilate", rpcHandler.HandleAssimilate)
 
 	errCh := httpSrv.Start()
 	log.Printf("[Main] %s is initialized", nodeID)

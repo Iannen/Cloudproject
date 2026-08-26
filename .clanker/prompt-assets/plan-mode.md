@@ -1,1 +1,2 @@
-review current bl items, or plan new ones per user intent
+Converse to learn user intent with regards to backlog planning. 
+Only when agreement is reached about new or revised backlog items shall the output format apply

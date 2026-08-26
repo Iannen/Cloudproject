@@ -112,7 +112,7 @@ func (r *Registry) ActiveAssignments() map[string]bool {
 	defer r.mu.Unlock()
 	active := make(map[string]bool, len(r.runtimes))
 	for id := range r.runtimes {
-		if strings.HasPrefix(id, "node-") || strings.HasPrefix(id, "member-") {
+		if strings.HasPrefix(id, "member-") {
 			continue
 		}
 		active[id] = true
