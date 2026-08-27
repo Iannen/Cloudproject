@@ -3,10 +3,12 @@ package adapters
 import (
 	"context"
 	"encoding/json"
-	"go-controller/src/core/models"
 	"net/http"
 	"time"
 )
+
+type PayloadHandler[T any] func(ctx context.Context, payload T) (string, error)
+type ActionHandler func(ctx context.Context) (string, error)
 
 type HTTPServerConfig struct {
 	Addr          string
@@ -28,7 +30,7 @@ func NewHTTPServerAdapter(cfg HTTPServerConfig) *HTTPServerAdapter {
 	}
 }
 
-func RegisterPost[T any](s *HTTPServerAdapter, pattern string, handler models.PayloadHandler[T]) {
+func RegisterPost[T any](s *HTTPServerAdapter, pattern string, handler PayloadHandler[T]) {
 	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -57,7 +59,7 @@ func RegisterPost[T any](s *HTTPServerAdapter, pattern string, handler models.Pa
 	})
 }
 
-func RegisterGet(s *HTTPServerAdapter, pattern string, handler models.ActionHandler) {
+func RegisterGet(s *HTTPServerAdapter, pattern string, handler ActionHandler) {
 	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
