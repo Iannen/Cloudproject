@@ -6,7 +6,6 @@ import (
 	"go-controller/src/core/registry"
 	"go-controller/src/core/roles"
 	"log"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -28,7 +27,7 @@ func main() {
 
 	nodeID := osa.GetNodeID()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
 	docker := adapters.NewDockerAdapter(adapters.DockerConfig{
@@ -93,17 +92,16 @@ func main() {
 	errCh := httpSrv.Start()
 	log.Printf("[Main] %s is initialized", nodeID)
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case err := <-errCh:
 		log.Printf("[Main] HTTP server error: %v", err)
-	case <-sigChan:
+	case <-ctx.Done():
 		log.Println("[Main] Shutting down node...")
 	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), timeout)
 	defer shutdownCancel()
+
 	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("[Main] Error shutting down HTTP server: %v", err)
 	}

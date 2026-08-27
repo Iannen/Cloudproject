@@ -7,9 +7,9 @@ II. Items that need further refining & QC:
 
 III. Purported actionable items:
 
-[ ] Refactor main.go to adhere to idiomatic Go composition root practices
-    [ ] Replace manual os.Signal channel handling with signal.NotifyContext
-    [ ] Reorder shutdown sequence to ensure HTTP server stops prior to tearing down Registry runtimes
+[x] Refactor main.go to adhere to idiomatic Go composition root practices
+    [x] Replace manual os.Signal channel handling with signal.NotifyContext
+    [x] Reorder shutdown sequence to ensure HTTP server stops prior to tearing down Registry runtimes
 
 [ ] CTX naming standardization, propagation and usage
     [ ] Adopt explicit ctx naming conventions: app_ctx for application-scoped lifecycle contexts, and req_ctx for HTTP request-bound contexts
