@@ -95,10 +95,6 @@ func (m *MemberRole) runSession(sCtx context.Context, sess models.Session) error
 			if !ok {
 				return nil
 			}
-			if ev.Err != nil {
-				log.Printf("[Member] Event stream error: %v", ev.Err)
-				continue
-			}
 
 			switch ev.Type {
 			case models.EventLeaderDeleted:

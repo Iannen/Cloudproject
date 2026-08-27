@@ -10,7 +10,6 @@ const (
 
 type MemberEvent struct {
 	Type MemberEventType
-	Err  error
 }
 
 type LeaderEventType string
@@ -21,7 +20,6 @@ const (
 
 type LeaderEvent struct {
 	Type LeaderEventType
-	Err  error
 }
 
 type RecruiterEventType string
@@ -32,5 +30,4 @@ const (
 
 type RecruiterEvent struct {
 	Type RecruiterEventType
-	Err  error
 }

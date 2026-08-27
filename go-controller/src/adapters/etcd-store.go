@@ -336,10 +336,6 @@ func (s *Store) watchAssignmentLoop(ctx context.Context, nodeAsgPath string, rev
 				if errors.Is(resp.Err(), context.Canceled) {
 					return false
 				}
-				s.notifyEvent(ch, models.MemberEvent{
-					Type: models.EventAssignmentChange,
-					Err:  resp.Err(),
-				})
 				return true
 			}
 			if resp.Header.Revision > *rev {

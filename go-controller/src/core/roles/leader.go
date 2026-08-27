@@ -25,13 +25,9 @@ func (l *LeaderRole) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case ev, ok := <-ch:
+		case _, ok := <-ch:
 			if !ok {
 				return
-			}
-			if ev.Err != nil {
-				log.Printf("[Leader] Event stream error: %v", ev.Err)
-				continue
 			}
 			if err := l.reconcile(ctx); err != nil {
 				log.Println(err)
