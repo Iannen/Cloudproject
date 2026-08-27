@@ -190,3 +190,12 @@ XXXIX: Internal Event Stream Encapsulation in Store Adapters
 XL: Streamlining Models and Configuration Indirection
     - Replaced role-specific event types (`MemberEvent`, `LeaderEvent`, `RecruiterEvent`) with the unified `models.Event`.
     - Inlined the single-use `RoleSpec` struct directly into `config.go` to reduce package indirection.
+
+XLI: Tailscale Peer Filtering Delegation to Adapter
+    - Configured Tailscale adapter to accept NodeNamePrefix on construction and filter out irrelevant nodes during GetPeers.
+    - Added guard clause to filter out peers without Tailscale IPs directly within the Tailscale adapter.
+    - Cleaned up config and recruiter core logic by removing obsolete filtering code, keeping core processes lean and high-signal.
+
+XLII: Idiomatic Composition Root Refactoring in Main
+    - Replaced manual OS signal channel handling with context propagation via signal.NotifyContext.
+    - Restructured the graceful shutdown sequence in main to halt the HTTP server prior to tearing down Registry runtimes.

@@ -7,10 +7,6 @@ II. Items that need further refining & QC:
 
 III. Purported actionable items:
 
-[x] Refactor main.go to adhere to idiomatic Go composition root practices
-    [x] Replace manual os.Signal channel handling with signal.NotifyContext
-    [x] Reorder shutdown sequence to ensure HTTP server stops prior to tearing down Registry runtimes
-
 [ ] CTX naming standardization, propagation and usage
     [ ] Adopt explicit ctx naming conventions: app_ctx for application-scoped lifecycle contexts, and req_ctx for HTTP request-bound contexts
     [ ] Audit background goroutine spawns in RPCHandler and Registry to ensure they use app_ctx rather than request-scoped contexts
@@ -24,17 +20,6 @@ III. Purported actionable items:
         - Phase 2: Process helpers sequentially:
             a. Detect and evict dead/unresponsive members to clear etcd "unhealthy cluster" blocks
             b. Refetch/update state and evaluate remaining capacity to recruit new online Tailscale peers
-
-[x] Push Tailscale peer filtering down into the Tailscale adapter to return pre-filtered "cluster candidates"
-    [x] Update tailscale.go:
-        adapters.TailscaleConfig receives the 'NodeNamePrefix' on construction, which is stored on adapter struct same as other things
-        'TailscaleAdapter' uses 'NodeNamePrefix' to filter out irrelevant nodes for purpose of 'GetPeers', delivering only 'proper' candidates. *
-        'GetPeers' also filters out peers with no Tailscale IPs (`len(p.TailscaleIPs) == 0`) *
-     [x] main.go:
-        Pass 'NodeNamePrefix' to 'adapters.TailscaleConfig'. 
-        Do not use the config declaration of the prefix, rather inline similar to other adapter construction that occurs in main.go
-         -> remove now unused 'NodeNamePrefix' from config
-    - (ref to *) -> Remove these checks from the Recruiter core reconciliation loop to keep core logic lean and focused on orchestration
 
 IV. Ran-into-trouble items:
 
