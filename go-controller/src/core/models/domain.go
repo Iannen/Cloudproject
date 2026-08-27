@@ -12,10 +12,7 @@ type MemberInfo struct {
 	Name     string
 	PeerURLs []string
 }
-type RoleSpec struct {
-	Name     string
-	Replicas int
-}
+
 type TSPeer struct {
 	HostName     string
 	TailscaleIPs []string

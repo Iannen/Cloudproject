@@ -210,14 +210,14 @@ func (s *Store) ClaimLeader(ctx context.Context, sess models.Session, nodeID str
 	return resp.Succeeded, nil
 }
 
-func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.MemberEvent, error) {
+func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.Event, error) {
 	_, rev, err := s.NodeAssignments(ctx, nodeID)
 	if err != nil {
 		return nil, err
 	}
 
 	nodeAsgPath := s.nodeAssignmentsPath(nodeID)
-	ch := make(chan models.MemberEvent, 10)
+	ch := make(chan models.Event, 10)
 
 	go s.runLeaderWatcher(ctx, ch)
 	go s.runTicker(ctx, ch)
@@ -226,8 +226,8 @@ func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan mode
 	return ch, nil
 }
 
-func (s *Store) SubscribeLeaderEvents(ctx context.Context) (<-chan models.LeaderEvent, error) {
-	ch := make(chan models.LeaderEvent, 10)
+func (s *Store) SubscribeLeaderEvents(ctx context.Context) (<-chan models.Event, error) {
+	ch := make(chan models.Event, 10)
 	go func() {
 		tk := time.NewTicker(s.cfg.ReconcileInterval)
 		defer tk.Stop()
@@ -237,7 +237,7 @@ func (s *Store) SubscribeLeaderEvents(ctx context.Context) (<-chan models.Leader
 				return
 			case <-tk.C:
 				select {
-				case ch <- models.LeaderEvent{Type: models.EventLeaderReconcileTick}:
+				case ch <- models.Event{Type: models.EventReconcileTick}:
 				default:
 				}
 			}
@@ -246,8 +246,8 @@ func (s *Store) SubscribeLeaderEvents(ctx context.Context) (<-chan models.Leader
 	return ch, nil
 }
 
-func (s *Store) SubscribeRecruiterEvents(ctx context.Context) (<-chan models.RecruiterEvent, error) {
-	ch := make(chan models.RecruiterEvent, 10)
+func (s *Store) SubscribeRecruiterEvents(ctx context.Context) (<-chan models.Event, error) {
+	ch := make(chan models.Event, 10)
 	go func() {
 		tk := time.NewTicker(s.cfg.ReconcileInterval)
 		defer tk.Stop()
@@ -257,7 +257,7 @@ func (s *Store) SubscribeRecruiterEvents(ctx context.Context) (<-chan models.Rec
 				return
 			case <-tk.C:
 				select {
-				case ch <- models.RecruiterEvent{Type: models.EventRecruiterReconcileTick}:
+				case ch <- models.Event{Type: models.EventReconcileTick}:
 				default:
 				}
 			}
@@ -266,14 +266,14 @@ func (s *Store) SubscribeRecruiterEvents(ctx context.Context) (<-chan models.Rec
 	return ch, nil
 }
 
-func (s *Store) notifyEvent(ch chan<- models.MemberEvent, ev models.MemberEvent) {
+func (s *Store) notifyEvent(ch chan<- models.Event, ev models.Event) {
 	select {
 	case ch <- ev:
 	default:
 	}
 }
 
-func (s *Store) runLeaderWatcher(ctx context.Context, ch chan<- models.MemberEvent) {
+func (s *Store) runLeaderWatcher(ctx context.Context, ch chan<- models.Event) {
 	wChan := s.cli.Watch(ctx, s.cfg.LeaderKey)
 	for {
 		select {
@@ -285,14 +285,14 @@ func (s *Store) runLeaderWatcher(ctx context.Context, ch chan<- models.MemberEve
 			}
 			for _, ev := range resp.Events {
 				if ev.Type == clientv3.EventTypeDelete {
-					s.notifyEvent(ch, models.MemberEvent{Type: models.EventLeaderDeleted})
+					s.notifyEvent(ch, models.Event{Type: models.EventLeaderDeleted})
 				}
 			}
 		}
 	}
 }
 
-func (s *Store) runTicker(ctx context.Context, ch chan<- models.MemberEvent) {
+func (s *Store) runTicker(ctx context.Context, ch chan<- models.Event) {
 	tk := time.NewTicker(s.cfg.ReconcileInterval)
 	defer tk.Stop()
 
@@ -301,12 +301,12 @@ func (s *Store) runTicker(ctx context.Context, ch chan<- models.MemberEvent) {
 		case <-ctx.Done():
 			return
 		case <-tk.C:
-			s.notifyEvent(ch, models.MemberEvent{Type: models.EventReconcileTick})
+			s.notifyEvent(ch, models.Event{Type: models.EventReconcileTick})
 		}
 	}
 }
 
-func (s *Store) runAssignmentWatch(ctx context.Context, nodeAsgPath string, rev int64, ch chan<- models.MemberEvent) {
+func (s *Store) runAssignmentWatch(ctx context.Context, nodeAsgPath string, rev int64, ch chan<- models.Event) {
 	for {
 		if !s.watchAssignmentLoop(ctx, nodeAsgPath, &rev, ch) {
 			return
@@ -321,7 +321,7 @@ func (s *Store) runAssignmentWatch(ctx context.Context, nodeAsgPath string, rev 
 	}
 }
 
-func (s *Store) watchAssignmentLoop(ctx context.Context, nodeAsgPath string, rev *int64, ch chan<- models.MemberEvent) bool {
+func (s *Store) watchAssignmentLoop(ctx context.Context, nodeAsgPath string, rev *int64, ch chan<- models.Event) bool {
 	wCh := s.cli.Watch(ctx, nodeAsgPath, clientv3.WithRev(*rev+1))
 
 	for {
@@ -343,7 +343,7 @@ func (s *Store) watchAssignmentLoop(ctx context.Context, nodeAsgPath string, rev
 			}
 
 			if len(resp.Events) > 0 {
-				s.notifyEvent(ch, models.MemberEvent{Type: models.EventAssignmentChange})
+				s.notifyEvent(ch, models.Event{Type: models.EventAssignmentChange})
 			}
 		}
 	}

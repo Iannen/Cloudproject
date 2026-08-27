@@ -1,7 +1,6 @@
 package config
 
 import (
-	"go-controller/src/core/models"
 	"time"
 )
 
@@ -10,6 +9,11 @@ const (
 	NodeNamePrefix = "kaffcloud"
 )
 
-var ClusterSpec = []models.RoleSpec{
+type RoleSpec struct {
+	Name     string
+	Replicas int
+}
+
+var ClusterSpec = []RoleSpec{
 	{Name: "tailscale-manager", Replicas: 1},
 }

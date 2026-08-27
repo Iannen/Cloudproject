@@ -178,3 +178,15 @@ XXXVII: Redesigned role lifecycle architecture into a 3-tier hierarchy
     - Established Tier 1 (`RPCHandler`) as the host process maintained directly by `main.go` and exempt from the registry.
     - Established Tier 2 (`MemberRole`) managed directly by `RPCHandler` to handle etcd sessions and elections.
     - Established Tier 3 (Dynamic Roles) managed exclusively by `MemberRole` via the registry to eliminate circular self-management.
+
+XXXVIII: Core Codebase Cleanup and Decoupling
+    - Removed unused `dcr` and `osa` struct fields from `Registry` in `core/registry/registry.go`.
+    - Moved the `TSStatus` struct definition from `core/models/dto.go` to the adapters package where it is consumed.
+
+XXXIX: Internal Event Stream Encapsulation in Store Adapters
+    - Refactored `SubscribeEvents` and `SubscribeLeaderEvents` to manage store reconnections and low-level watch errors internally.
+    - Stripped redundant error checking and connection loops from core roles (`leader.go` and `member.go`) to maintain a lean, high-signal core logic.
+
+XL: Streamlining Models and Configuration Indirection
+    - Replaced role-specific event types (`MemberEvent`, `LeaderEvent`, `RecruiterEvent`) with the unified `models.Event`.
+    - Inlined the single-use `RoleSpec` struct directly into `config.go` to reduce package indirection.

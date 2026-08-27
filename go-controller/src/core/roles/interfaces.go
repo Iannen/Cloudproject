@@ -25,7 +25,7 @@ type AssignmentStore interface {
 	GetActiveNodeIDs(ctx context.Context) ([]string, error)
 	GetAllAssignments(ctx context.Context) ([]models.Assignment, error)
 	CreateAssignment(ctx context.Context, a models.Assignment) error
-	SubscribeLeaderEvents(ctx context.Context) (<-chan models.LeaderEvent, error)
+	SubscribeLeaderEvents(ctx context.Context) (<-chan models.Event, error)
 }
 
 type ParticipantStore interface {
@@ -35,7 +35,7 @@ type ParticipantStore interface {
 	NewSession(ctx context.Context) (models.Session, error)
 	PutWithSession(ctx context.Context, sess models.Session, nodeID string, value string) error
 	ClaimLeader(ctx context.Context, sess models.Session, nodeID string) (bool, error)
-	SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.MemberEvent, error)
+	SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.Event, error)
 	Connect(ctx context.Context) error
 }
 
@@ -61,7 +61,7 @@ type ClusterMgr interface {
 	AddLearner(ctx context.Context, peerURL string) (*models.MemberInfo, []models.MemberInfo, error)
 	PromoteMember(ctx context.Context, memberID uint64) error
 	RemoveMember(ctx context.Context, memberID uint64) error
-	SubscribeRecruiterEvents(ctx context.Context) (<-chan models.RecruiterEvent, error)
+	SubscribeRecruiterEvents(ctx context.Context) (<-chan models.Event, error)
 }
 
 type TSClient interface {

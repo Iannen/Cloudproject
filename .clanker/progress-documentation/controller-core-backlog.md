@@ -35,31 +35,12 @@ II. Items under development:
     [ ] Eliminate stored context.Context fields from structs (e.g., RPCHandler) in favor of passing contexts explicitly via method calls
         -> nay! registry and rpchandler will carry appctx on them, as they manage the LC of long lived routines
     [ ] Audit background goroutine spawns to ensure they use proper application-scoped contexts rather than request-scoped HTTP contexts
-        -> we also must pass the http ctx into the method calls internal to the handlers, so that the request ctx can be cancelled if there is an issue(making the server return a 400 or 500 type response to whomever sent the req)
+        -> we also must pass the http ctx into the method calls internal to the handlers, so that the request ctx can be cancelled if there was an issue with execution (making the server return a 400 or 500 type response to whomever sent the req)
     [ ] Review detached cleanup contexts (like defer calls) to ensure they utilize bounded timeouts rather than raw context.Background()
-
-[ ] Streamline models package types and event definitions (we must analyse any usages in the adapters package prior before this can proceed)
-    [ ] Replace role-specific event types (MemberEvent, LeaderEvent, RecruiterEvent) with unified models.Event
-        -> one has to see adapter logic first, i think?
-    [ ] Remove unused models/handlers.go file and types
-        -> if they are unused by core, but used by adapters, then they can be moved to adapters.
-    [ ] Inline single-use RoleSpec struct into config.go
-        -> yeah that i agree with. it just reduces indirection - right (new word for me)
-        
+       
 III. Ran-into-trouble items:
 
 IV. Purported actionable items:
-
-[x] Clean up unused code and redundant struct dependencies across core packages
-    [x] Remove unused dcr and osa struct fields from Registry in core/registry/registry.go
-    [x] Move TSStatus struct definition from core/models/dto.go to the adapters package (it is used by tailscale.go)
-
-[x] Push event streaming boilerplate and transient error handling down into store adapters
-    [x] Refactor SubscribeEvents and SubscribeLeaderEvents to manage reconnections internally
-        - Detail: Absorb low-level watch errors, retries, and stream-level noise entirely within the store adapters so core roles receive a clean, reliable stream of actionable domain events.
-        - Affected files: go-controller/src/core/roles/leader.go, go-controller/src/core/roles/member.go, and relevant adapter files (e.g., go-controller/src/adapters/etcd-store.go)
-        - Goal: Strip out repetitive `ev.Err != nil` checks and connection loops from core roles, keeping core logic lean and high-signal.
-
 
 V. Idea bucket:
 
