@@ -15,28 +15,22 @@ type RoleRunner interface {
 type Registry struct {
 	appCtx    context.Context
 	mu        sync.Mutex
-	dcr       roles.DockerMgr
 	etcd      roles.StoreAdapter
 	rpcClient roles.RpcClient
-	osa       roles.FileMgr
 	ts        roles.TSClient
 	runtimes  map[string]*AssignmentRuntime
 }
 
 func NewRegistry(
 	appCtx context.Context,
-	dcr roles.DockerMgr,
 	etcd roles.StoreAdapter,
 	rpcClient roles.RpcClient,
-	osa roles.FileMgr,
 	ts roles.TSClient,
 ) *Registry {
 	return &Registry{
 		appCtx:    appCtx,
-		dcr:       dcr,
 		etcd:      etcd,
 		rpcClient: rpcClient,
-		osa:       osa,
 		ts:        ts,
 		runtimes:  make(map[string]*AssignmentRuntime),
 	}

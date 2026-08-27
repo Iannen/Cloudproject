@@ -6,8 +6,3 @@ type AssimilatePayload struct {
 	EtcdInitialCluster string
 	AssignedIP         string
 }
-
-type TSStatus struct {
-	Peer map[string]TSPeer
-	Self TSPeer
-}

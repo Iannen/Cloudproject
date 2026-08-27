@@ -10,6 +10,11 @@ import (
 	"strings"
 )
 
+type TSStatus struct {
+	Peer map[string]models.TSPeer
+	Self models.TSPeer
+}
+
 type TailscaleConfig struct {
 	BinaryPath string
 	EnvKey     string
@@ -33,7 +38,7 @@ func (t *TailscaleAdapter) GetPeers(ctx context.Context) ([]models.TSPeer, error
 		return nil, fmt.Errorf("tailscale status: %w", err)
 	}
 
-	var st models.TSStatus
+	var st TSStatus
 	if err := json.Unmarshal(out, &st); err != nil {
 		return nil, fmt.Errorf("unmarshal status: %w", err)
 	}

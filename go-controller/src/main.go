@@ -75,10 +75,8 @@ func main() {
 
 	reg := registry.NewRegistry(
 		ctx,
-		docker,
 		etcd,
 		httpCli,
-		osa,
 		ts,
 	)
 

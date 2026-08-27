@@ -49,9 +49,9 @@ III. Ran-into-trouble items:
 
 IV. Purported actionable items:
 
-[ ] Clean up unused code and redundant struct dependencies across core packages
-    [ ] Remove unused dcr and osa struct fields from Registry in core/registry/registry.go
-    [ ] Move TSStatus struct definition from core/models/dto.go to the adapters package (it is used by tailscale.go)
+[x] Clean up unused code and redundant struct dependencies across core packages
+    [x] Remove unused dcr and osa struct fields from Registry in core/registry/registry.go
+    [x] Move TSStatus struct definition from core/models/dto.go to the adapters package (it is used by tailscale.go)
 
 V. Idea bucket:
 
