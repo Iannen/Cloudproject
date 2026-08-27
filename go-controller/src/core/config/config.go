@@ -1,14 +1,5 @@
 package config
 
-import (
-	"time"
-)
-
-const (
-	Timeout        = 3 * time.Second
-	NodeNamePrefix = "kaffcloud"
-)
-
 type RoleSpec struct {
 	Name     string
 	Replicas int

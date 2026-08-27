@@ -16,19 +16,22 @@ type TSStatus struct {
 }
 
 type TailscaleConfig struct {
-	BinaryPath string
-	EnvKey     string
+	BinaryPath     string
+	EnvKey         string
+	NodeNamePrefix string
 }
 
 type TailscaleAdapter struct {
-	binaryPath string
-	envKey     string
+	binaryPath     string
+	envKey         string
+	nodeNamePrefix string
 }
 
 func NewTailscaleAdapter(cfg TailscaleConfig) *TailscaleAdapter {
 	return &TailscaleAdapter{
-		binaryPath: cfg.BinaryPath,
-		envKey:     cfg.EnvKey,
+		binaryPath:     cfg.BinaryPath,
+		envKey:         cfg.EnvKey,
+		nodeNamePrefix: cfg.NodeNamePrefix,
 	}
 }
 
@@ -43,11 +46,19 @@ func (t *TailscaleAdapter) GetPeers(ctx context.Context) ([]models.TSPeer, error
 		return nil, fmt.Errorf("unmarshal status: %w", err)
 	}
 
-	res := make([]models.TSPeer, 0, len(st.Peer)+1)
+	allPeers := make([]models.TSPeer, 0, len(st.Peer)+1)
 	if st.Self.HostName != "" || len(st.Self.TailscaleIPs) > 0 {
-		res = append(res, st.Self)
+		allPeers = append(allPeers, st.Self)
 	}
 	for _, p := range st.Peer {
+		allPeers = append(allPeers, p)
+	}
+
+	res := make([]models.TSPeer, 0, len(allPeers))
+	for _, p := range allPeers {
+		if !p.Online || len(p.TailscaleIPs) == 0 || (t.nodeNamePrefix != "" && !strings.HasPrefix(p.HostName, t.nodeNamePrefix)) {
+			continue
+		}
 		res = append(res, p)
 	}
 	return res, nil

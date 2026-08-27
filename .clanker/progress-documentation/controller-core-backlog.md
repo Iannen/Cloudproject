@@ -1,22 +1,15 @@
 I. Long term North Star items:
 
-[ ] Implement automated dead etcd member pruning in TS Manager (Recruiter)
-    [ ] Detect offline/unresponsive nodes during TS Manager reconciliation cycles
-    [ ] Evict unreachable members via etcd API prior to adding new nodes
-        - Resolves etcd "unhealthy cluster" blocks on AddLearner when a node is down (e.g., stopping 1 node in a 3-node cluster causes `add_learner` to fail with `etcdserver: unhealthy cluster` when recruiting a 4th node)
-
-    [ ] Add etcd status endpoint, for easy and comprehensive diagnostics of etcd related issues
-
 II. Items that need further refining & QC:
 
-[ ] Look for commonalities of the various roles, potentially leading refactors that save characters/tokens and presents a cleaner, more solid architecture
-       
+[ ] Standardize tick-bound cancellation contexts across all reconciliation loops
+    - Ensure each reconcile tick derives a cancellable child context (with timeouts or loop-tick cancellation) to prevent overlapping/hanging concurrent runs in LeaderRole, Recruiter, and MemberRole.
+
 III. Purported actionable items:
 
 [ ] Refactor main.go to adhere to idiomatic Go composition root practices
     [ ] Replace manual os.Signal channel handling with signal.NotifyContext
     [ ] Reorder shutdown sequence to ensure HTTP server stops prior to tearing down Registry runtimes
-
 
 [ ] CTX naming standardization, propagation and usage
     [ ] Adopt explicit ctx naming conventions: app_ctx for application-scoped lifecycle contexts, and req_ctx for HTTP request-bound contexts
@@ -24,9 +17,29 @@ III. Purported actionable items:
     [ ] Pass req_ctx explicitly through handler method calls to ensure proper request cancellation, timeouts, and error code propagation (400/500)
     [ ] Review detached cleanup contexts (like defer calls) to utilize bounded timeouts rather than raw context.Background()
 
+[ ] Implement automated dead etcd member pruning in Recruiter
+    [ ] Align logs, symbols & whatever else to use Recruiter terminology instead of legacy tsmgr
+    [ ] Refactor Recruiter reconciliation loop into a sequential pipeline:
+        - Phase 1: Collect raw observational data from Tailscale and etcd (ports)
+        - Phase 2: Process helpers sequentially:
+            a. Detect and evict dead/unresponsive members to clear etcd "unhealthy cluster" blocks
+            b. Refetch/update state and evaluate remaining capacity to recruit new online Tailscale peers
+
+[x] Push Tailscale peer filtering down into the Tailscale adapter to return pre-filtered "cluster candidates"
+    [x] Update tailscale.go:
+        adapters.TailscaleConfig receives the 'NodeNamePrefix' on construction, which is stored on adapter struct same as other things
+        'TailscaleAdapter' uses 'NodeNamePrefix' to filter out irrelevant nodes for purpose of 'GetPeers', delivering only 'proper' candidates. *
+        'GetPeers' also filters out peers with no Tailscale IPs (`len(p.TailscaleIPs) == 0`) *
+     [x] main.go:
+        Pass 'NodeNamePrefix' to 'adapters.TailscaleConfig'. 
+        Do not use the config declaration of the prefix, rather inline similar to other adapter construction that occurs in main.go
+         -> remove now unused 'NodeNamePrefix' from config
+    - (ref to *) -> Remove these checks from the Recruiter core reconciliation loop to keep core logic lean and focused on orchestration
+
 IV. Ran-into-trouble items:
 
 V. Idea bucket:
+    [ ] Add etcd status endpoint, for easy and comprehensive diagnostics of etcd related issues
 
 VI. Bugs:
 

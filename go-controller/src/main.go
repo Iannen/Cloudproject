@@ -69,8 +69,9 @@ func main() {
 		StartupInterval:      startupInterval,
 	})
 	ts := adapters.NewTailscaleAdapter(adapters.TailscaleConfig{
-		BinaryPath: "tailscale",
-		EnvKey:     "TAILSCALE_IP",
+		BinaryPath:     "tailscale",
+		EnvKey:         "TAILSCALE_IP",
+		NodeNamePrefix: "kaffcloud",
 	})
 
 	reg := registry.NewRegistry(

@@ -3,7 +3,6 @@ package roles
 import (
 	"context"
 	"fmt"
-	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"log"
 	"strings"
@@ -55,10 +54,6 @@ func (t *Recruiter) reconcile(ctx context.Context, nodeID string) error {
 	}
 
 	for _, p := range peers {
-		if !p.Online || len(p.TailscaleIPs) == 0 || !strings.HasPrefix(p.HostName, config.NodeNamePrefix) {
-			continue
-		}
-
 		peerURL := t.peerURL(p.TailscaleIPs[0])
 		if seenIPs[peerURL] {
 			continue
