@@ -223,14 +223,14 @@ func (s *Store) ClaimLeader(ctx context.Context, nodeID string) (bool, error) {
 	return resp.Succeeded, nil
 }
 
-func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.Event, error) {
+func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.MemberEvent, error) {
 	_, rev, err := s.NodeAssignments(ctx, nodeID)
 	if err != nil {
 		return nil, err
 	}
 
 	nodeAsgPath := s.nodeAssignmentsPath(nodeID)
-	ch := make(chan models.Event, 10)
+	ch := make(chan models.MemberEvent, 10)
 
 	go s.runSessionWatcher(ctx, ch)
 	go s.runLeaderWatcher(ctx, ch)
@@ -240,7 +240,7 @@ func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan mode
 	return ch, nil
 }
 
-func (s *Store) runSessionWatcher(ctx context.Context, ch chan<- models.Event) {
+func (s *Store) runSessionWatcher(ctx context.Context, ch chan<- models.MemberEvent) {
 	if s.sess == nil {
 		return
 	}
@@ -248,7 +248,7 @@ func (s *Store) runSessionWatcher(ctx context.Context, ch chan<- models.Event) {
 	case <-ctx.Done():
 		return
 	case <-s.sess.Done():
-		s.notifyEvent(ch, models.Event{Type: models.EventSessionExpired})
+		s.notifyEvent(ch, models.MemberSessionExpiredEvent{})
 	}
 }
 
@@ -308,14 +308,17 @@ func (s *Store) SubscribeRecruiterEvents(ctx context.Context) (<-chan models.Rec
 	return ch, nil
 }
 
-func (s *Store) notifyEvent(ch chan<- models.Event, ev models.Event) {
+func (s *Store) notifyEvent(ch chan<- models.MemberEvent, ev models.MemberEvent) {
 	select {
 	case ch <- ev:
 	default:
+		if te, ok := ev.(models.TickEvent); ok && te.Cancel != nil {
+			te.Cancel()
+		}
 	}
 }
 
-func (s *Store) runLeaderWatcher(ctx context.Context, ch chan<- models.Event) {
+func (s *Store) runLeaderWatcher(ctx context.Context, ch chan<- models.MemberEvent) {
 	wChan := s.cli.Watch(ctx, s.cfg.LeaderKey)
 	for {
 		select {
@@ -327,14 +330,14 @@ func (s *Store) runLeaderWatcher(ctx context.Context, ch chan<- models.Event) {
 			}
 			for _, ev := range resp.Events {
 				if ev.Type == clientv3.EventTypeDelete {
-					s.notifyEvent(ch, models.Event{Type: models.EventLeaderDeleted})
+					s.notifyEvent(ch, models.MemberLeaderDeletedEvent{})
 				}
 			}
 		}
 	}
 }
 
-func (s *Store) runTicker(ctx context.Context, ch chan<- models.Event) {
+func (s *Store) runTicker(ctx context.Context, ch chan<- models.MemberEvent) {
 	tk := time.NewTicker(s.cfg.ReconcileInterval)
 	defer tk.Stop()
 
@@ -343,12 +346,17 @@ func (s *Store) runTicker(ctx context.Context, ch chan<- models.Event) {
 		case <-ctx.Done():
 			return
 		case <-tk.C:
-			s.notifyEvent(ch, models.Event{Type: models.EventReconcileTick})
+			tickCtx, tickCancel := context.WithTimeout(ctx, s.cfg.TickTimeout)
+			ev := models.TickEvent{
+				Ctx:    tickCtx,
+				Cancel: tickCancel,
+			}
+			s.notifyEvent(ch, ev)
 		}
 	}
 }
 
-func (s *Store) runAssignmentWatch(ctx context.Context, nodeAsgPath string, rev int64, ch chan<- models.Event) {
+func (s *Store) runAssignmentWatch(ctx context.Context, nodeAsgPath string, rev int64, ch chan<- models.MemberEvent) {
 	for {
 		if !s.watchAssignmentLoop(ctx, nodeAsgPath, &rev, ch) {
 			return
@@ -363,7 +371,7 @@ func (s *Store) runAssignmentWatch(ctx context.Context, nodeAsgPath string, rev 
 	}
 }
 
-func (s *Store) watchAssignmentLoop(ctx context.Context, nodeAsgPath string, rev *int64, ch chan<- models.Event) bool {
+func (s *Store) watchAssignmentLoop(ctx context.Context, nodeAsgPath string, rev *int64, ch chan<- models.MemberEvent) bool {
 	wCh := s.cli.Watch(ctx, nodeAsgPath, clientv3.WithRev(*rev+1))
 
 	for {
@@ -385,7 +393,7 @@ func (s *Store) watchAssignmentLoop(ctx context.Context, nodeAsgPath string, rev
 			}
 
 			if len(resp.Events) > 0 {
-				s.notifyEvent(ch, models.Event{Type: models.EventAssignmentChange})
+				s.notifyEvent(ch, models.MemberAssignmentChangeEvent{})
 			}
 		}
 	}

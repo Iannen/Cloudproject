@@ -36,7 +36,7 @@ type ParticipantStore interface {
 	CloseSession() error
 	PutHeartbeat(ctx context.Context, nodeID string, value string) error
 	ClaimLeader(ctx context.Context, nodeID string) (bool, error)
-	SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.Event, error)
+	SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.MemberEvent, error)
 	Connect(ctx context.Context) error
 }
 

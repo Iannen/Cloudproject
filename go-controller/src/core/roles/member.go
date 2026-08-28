@@ -2,7 +2,7 @@ package roles
 
 import (
 	"context"
-	"errors"
+	"sync/atomic"
 
 	"go-controller/src/core/models"
 	"log"
@@ -12,6 +12,7 @@ type MemberRole struct {
 	asg      models.Assignment
 	store    ParticipantStore
 	registry RoleMgr
+	inFlight atomic.Bool
 }
 
 func NewMemberAssignment(nodeID string) models.Assignment {
@@ -67,16 +68,19 @@ func (m *MemberRole) Run(ctx context.Context) {
 		m.tryClaimLeadership(ctx)
 		m.reconcile(ctx)
 
-		if err := m.runSession(ctx); err != nil {
+		sCtx, cancelSession := context.WithCancel(ctx)
+
+		if err := m.runSession(sCtx, cancelSession); err != nil {
 			log.Printf("[Member] Session terminated: %v", err)
 		}
 
+		cancelSession()
 		_ = m.store.CloseSession()
 		m.registry.StopManagedAssignments()
 	}
 }
 
-func (m *MemberRole) runSession(sCtx context.Context) error {
+func (m *MemberRole) runSession(sCtx context.Context, cancelSession context.CancelFunc) error {
 	ch, err := m.store.SubscribeEvents(sCtx, m.asg.NodeID)
 	if err != nil {
 		return err
@@ -91,26 +95,50 @@ func (m *MemberRole) runSession(sCtx context.Context) error {
 			if !ok {
 				return nil
 			}
-
-			if ev.Type == models.EventSessionExpired {
-				return errors.New("session lease expired")
-			}
-
-			m.handleEvent(sCtx, ev)
+			m.handleEvent(sCtx, cancelSession, ev)
 		}
 	}
 }
 
-func (m *MemberRole) handleEvent(ctx context.Context, ev models.Event) {
-	switch ev.Type {
-	case models.EventLeaderDeleted:
-		m.tryClaimLeadership(ctx)
+func (m *MemberRole) handleEvent(sCtx context.Context, cancelSession context.CancelFunc, ev models.MemberEvent) {
+	switch e := ev.(type) {
+	case models.MemberSessionExpiredEvent:
+		log.Println("[Member] Session lease expired event received, tearing down session...")
+		cancelSession()
 
-	case models.EventAssignmentChange, models.EventReconcileTick:
-		m.reconcile(ctx)
+	case models.MemberLeaderDeletedEvent:
+		m.tryClaimLeadership(sCtx)
+
+	case models.TickEvent:
+		if !m.inFlight.CompareAndSwap(false, true) {
+			if e.Cancel != nil {
+				e.Cancel()
+			}
+			return
+		}
+
+		go func(te models.TickEvent) {
+			if te.Cancel != nil {
+				defer te.Cancel()
+			}
+			defer m.inFlight.Store(false)
+
+			m.reconcile(te.Ctx)
+		}(e)
+
+	case models.MemberAssignmentChangeEvent:
+		if !m.inFlight.CompareAndSwap(false, true) {
+			return
+		}
+
+		go func() {
+			defer m.inFlight.Store(false)
+
+			m.reconcile(sCtx)
+		}()
 
 	default:
-		log.Printf("[Member] Unhandled event type: %s", ev.Type)
+		log.Printf("[Member] Unhandled event type: %T", ev)
 	}
 }
 

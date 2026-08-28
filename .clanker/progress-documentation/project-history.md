@@ -212,3 +212,22 @@ XLIV: Implement Sealed Interface Pattern and Tick-Bound Cancellation for Leader 
     - Updated LeaderRole event loop and handleEvent helper to process sealed LeaderEvent types using type switching.
     - Implemented concurrency control in LeaderRole using an atomic inFlight boolean flag to drop overlapping ticks and execute cancellation guards.
     - Refactored Recruiter handleEvent type switch to align with the generalized TickEvent model.
+
+XLV: Align MemberRole Structurally with Reconciler Execution Pattern
+    - Refactored MemberRole session lifecycle to move initial leadership claim and reconciliation logic into the main Run setup phase.
+    - Updated runSession, tryClaimLeadership, and reconcile method signatures to remove explicit session parameters.
+    - Extracted event processing and handling logic from runSession into a dedicated handleEvent helper method.
+    - Updated ParticipantStore interface and etcd adapter to manage active session state internally instead of passing session handles down from core.
+    - Implemented SessionExpiredEvent propagation from the store adapter to gracefully trigger session recycling upon lease expiration.
+
+XLVI: Implement Tick-Bound Cancellation and Sealed Event Model for Recruiter Reconciliation
+    - Standardized tick-bound cancellation context across the Recruiter reconciliation loop to prevent concurrent execution overlap using atomic in-flight guards.
+    - Derived tick context lifecycle management in etcd adapter, attaching tick context and cancellation functions to tick events while preventing resource leaks on channel saturation.
+    - Introduced sealed `RecruiterEvent` interface pattern in domain models to enforce compile-time type safety for Recruiter event streams.
+    - Refactored `Recruiter.Run` and `handleEvent` to process sealed events via type assertions, executing background reconciliation with explicit tick contexts.
+
+XLVII: Implement Tick-Bound Cancellation, Async Execution, and Sealed Events for Member Reconciliation
+    - Defined sealed `MemberEvent` interface pattern in domain models alongside specific event variants (`MemberAssignmentChangeEvent`, `MemberLeaderDeletedEvent`, `MemberSessionExpiredEvent`).
+    - Refactored `MemberRole` session lifecycle (`runSession` and `handleEvent`) to consume sealed `MemberEvent` streams via type switching.
+    - Integrated atomic in-flight state tracking (`inFlight atomic.Bool`) in `MemberRole` to guard against concurrent tick-driven or assignment-triggered reconciliation runs.
+    - Updated `ParticipantStore` interface port and etcd adapter implementation to emit sealed member events with derived tick timeouts and managed cancellation cleanup.

@@ -25,6 +25,10 @@ type LeaderEvent interface {
 	isLeaderEvent()
 }
 
+type MemberEvent interface {
+	isMemberEvent()
+}
+
 type TickEvent struct {
 	Ctx    context.Context
 	Cancel context.CancelFunc
@@ -32,3 +36,16 @@ type TickEvent struct {
 
 func (TickEvent) isRecruiterEvent() {}
 func (TickEvent) isLeaderEvent()    {}
+func (TickEvent) isMemberEvent()    {}
+
+type MemberAssignmentChangeEvent struct{}
+
+func (MemberAssignmentChangeEvent) isMemberEvent() {}
+
+type MemberLeaderDeletedEvent struct{}
+
+func (MemberLeaderDeletedEvent) isMemberEvent() {}
+
+type MemberSessionExpiredEvent struct{}
+
+func (MemberSessionExpiredEvent) isMemberEvent() {}

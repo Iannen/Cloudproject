@@ -27,6 +27,7 @@ func (l *LeaderRole) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+
 		case ev, ok := <-ch:
 			if !ok {
 				return
@@ -38,6 +39,7 @@ func (l *LeaderRole) Run(ctx context.Context) {
 
 func (l *LeaderRole) handleEvent(ev models.LeaderEvent) {
 	switch e := ev.(type) {
+
 	case models.TickEvent:
 		if !l.inFlight.CompareAndSwap(false, true) {
 			if e.Cancel != nil {
