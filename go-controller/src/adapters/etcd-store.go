@@ -12,18 +12,6 @@ import (
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
-type etcdSession struct {
-	sess *concurrency.Session
-}
-
-func (e *etcdSession) Done() <-chan struct{} {
-	return e.sess.Done()
-}
-
-func (e *etcdSession) Close() error {
-	return e.sess.Close()
-}
-
 func NewEvent(typ models.EventType) models.Event {
 	return models.Event{
 		Type: typ,
@@ -48,8 +36,9 @@ type StoreConfig struct {
 }
 
 type Store struct {
-	cli *clientv3.Client
-	cfg StoreConfig
+	cli  *clientv3.Client
+	cfg  StoreConfig
+	sess *concurrency.Session
 }
 
 func NewStore(cfg StoreConfig) *Store {
@@ -140,31 +129,49 @@ func (s *Store) CreateAssignment(ctx context.Context, a models.Assignment) error
 	return nil
 }
 
-func (s *Store) NewSession(ctx context.Context) (models.Session, error) {
-	var err error
-	for i := 0; i < s.cfg.StartupRetries; i++ {
-		var sess *concurrency.Session
-		sess, err = concurrency.NewSession(s.cli, concurrency.WithTTL(int(s.cfg.SessionTTL)), concurrency.WithContext(ctx))
-		if err == nil {
-			return &etcdSession{sess: sess}, nil
+func (s *Store) EnsureSession(ctx context.Context) error {
+	if s.sess != nil {
+		select {
+		case <-s.sess.Done():
+			s.sess = nil
+		default:
+			return nil
 		}
+	}
+
+	var lastErr error
+	for i := 0; i < s.cfg.StartupRetries; i++ {
+		sess, err := concurrency.NewSession(s.cli, concurrency.WithTTL(int(s.cfg.SessionTTL)), concurrency.WithContext(ctx))
+		if err == nil {
+			s.sess = sess
+			return nil
+		}
+		lastErr = err
 
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return ctx.Err()
 		case <-time.After(s.cfg.RetryInterval):
 		}
 	}
-	return nil, err
+	return lastErr
 }
 
-func (s *Store) PutWithSession(ctx context.Context, sess models.Session, nodeID, val string) error {
-	eSess, ok := sess.(*etcdSession)
-	if !ok {
-		return fmt.Errorf("invalid session type provided")
+func (s *Store) CloseSession() error {
+	if s.sess != nil {
+		err := s.sess.Close()
+		s.sess = nil
+		return err
+	}
+	return nil
+}
+
+func (s *Store) PutHeartbeat(ctx context.Context, nodeID, val string) error {
+	if s.sess == nil {
+		return fmt.Errorf("active session required")
 	}
 	key := s.cfg.PrefixHeartbeats + nodeID
-	_, err := s.cli.Put(ctx, key, val, clientv3.WithLease(eSess.sess.Lease()))
+	_, err := s.cli.Put(ctx, key, val, clientv3.WithLease(s.sess.Lease()))
 	return err
 }
 
@@ -201,14 +208,13 @@ func (s *Store) NodeAssignments(ctx context.Context, nodeID string) ([]string, i
 	return ids, rev, nil
 }
 
-func (s *Store) ClaimLeader(ctx context.Context, sess models.Session, nodeID string) (bool, error) {
-	eSess, ok := sess.(*etcdSession)
-	if !ok {
-		return false, fmt.Errorf("invalid session type provided")
+func (s *Store) ClaimLeader(ctx context.Context, nodeID string) (bool, error) {
+	if s.sess == nil {
+		return false, fmt.Errorf("active session required")
 	}
 	resp, err := s.cli.Txn(ctx).
 		If(clientv3.Compare(clientv3.CreateRevision(s.cfg.LeaderKey), "=", 0)).
-		Then(clientv3.OpPut(s.cfg.LeaderKey, nodeID, clientv3.WithLease(eSess.sess.Lease()))).
+		Then(clientv3.OpPut(s.cfg.LeaderKey, nodeID, clientv3.WithLease(s.sess.Lease()))).
 		Else(clientv3.OpGet(s.cfg.LeaderKey)).
 		Commit()
 	if err != nil {
@@ -226,11 +232,24 @@ func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan mode
 	nodeAsgPath := s.nodeAssignmentsPath(nodeID)
 	ch := make(chan models.Event, 10)
 
+	go s.runSessionWatcher(ctx, ch)
 	go s.runLeaderWatcher(ctx, ch)
 	go s.runTicker(ctx, ch)
 	go s.runAssignmentWatch(ctx, nodeAsgPath, rev, ch)
 
 	return ch, nil
+}
+
+func (s *Store) runSessionWatcher(ctx context.Context, ch chan<- models.Event) {
+	if s.sess == nil {
+		return
+	}
+	select {
+	case <-ctx.Done():
+		return
+	case <-s.sess.Done():
+		s.notifyEvent(ch, models.Event{Type: models.EventSessionExpired})
+	}
 }
 
 func (s *Store) SubscribeLeaderEvents(ctx context.Context) (<-chan models.LeaderEvent, error) {

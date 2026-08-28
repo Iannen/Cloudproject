@@ -8,6 +8,7 @@ const (
 	EventAssignmentChange EventType = "ASSIGNMENT_CHANGE"
 	EventLeaderDeleted    EventType = "LEADER_DELETED"
 	EventReconcileTick    EventType = "RECONCILE_TICK"
+	EventSessionExpired   EventType = "SESSION_EXPIRED"
 )
 
 type Event struct {

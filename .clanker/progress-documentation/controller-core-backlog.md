@@ -4,7 +4,7 @@ I. Idea bucket:
 II. Items to refine & QC:
 
 [ ] Standardize tick-bound cancellation contexts across reconciliation loops
-    - Ensure each reconcile tick derives a cancellable child context (with timeouts or loop-tick cancellation) to prevent overlapping/hanging concurrent runs in: [ ] LeaderRole
+    - Ensure each reconcile tick derives a cancellable child context (with timeouts or loop-tick cancellation) to prevent overlapping/hanging concurrent runs in: [x] LeaderRole
     [x] Recruiter
     [ ] MemberRole.
 
@@ -18,24 +18,14 @@ II. Items to refine & QC:
 
 III. Slated for implementation:
 
-[x] Implement a Sealed Interface pattern and tick-bound cancellation for LeaderRole event stream
-    [x] 'go-controller/src/core/models/events.go': Generalize tick event and add Leader marker interface
-        - Rename 'RecruiterTickEvent' to 'TickEvent' carrying 'Ctx context.Context' and 'Cancel context.CancelFunc'
-        - Define unexported marker interface 'LeaderEvent'
-        - Update 'RecruiterEvent' and 'LeaderEvent' interfaces to both be satisfied by 'TickEvent'
-        - Define additional 'LeaderEvent' concrete implementations as needed (e.g., 'LeaderChangeEvent')
-    [x] 'go-controller/src/core/roles/interfaces.go' & 'go-controller/src/adapters/etcd-store.go': Update Leader event subscription
-        - Update 'SubscribeLeaderEvents' store port and adapter signature to return '<-chan models.LeaderEvent'
-        - Update adapter implementation to emit sealed Leader events
-        - Derive tick-bound context using store config timeout and implement channel drop cancellation guards to prevent context leaks
-    [x] 'go-controller/src/core/roles/leader.go': Refactor LeaderRole event loop and add handleEvent helper
-        - Add 'inFlight atomic.Bool' field to 'LeaderRole' struct
-        - Refactor 'LeaderRole.Run' loop to pass incoming 'models.LeaderEvent' directly to a new 't.handleEvent(ev)' helper method
-        - Implement 'handleEvent(ev models.LeaderEvent)' using a Go type switch ('switch e := ev.(type)')
-        - Use 'l.inFlight.CompareAndSwap(false, true)' guard on tick events, invoking 'e.Cancel()' on drop
-        - Spawn 'l.reconcile' in a background goroutine passing 'e.Ctx', deferring 'e.Cancel()' and 'l.inFlight.Store(false)'
-    [x] 'go-controller/src/core/roles/recruiter.go': Update Recruiter references to generalized TickEvent
-        - Update 'Recruiter.handleEvent' type switch to match against 'models.TickEvent'
+[x] Align MemberRole structurally to other reconcilers: 'runSession' becomes the analogue of recruiter / leader Run. no need to rename it.
+    [x] 'go-controller/src/core/roles/member.go': Refactor session setup and method signatures
+        - Move initial 'tryClaimLeadership' and 'reconcile' invocations out of 'runSession' and into 'Run' setup phase
+        - Refactor 'runSession', 'tryClaimLeadership', and 'reconcile' to remove the 'sess' parameter
+        - Move event processing logic from 'runSession' into a dedicated 'handleEvent' helper method
+    [x] 'go-controller/src/core/roles/interfaces.go' & adapters: Encapsulate session state within store adapter. Remove all references to session from core members, so it becomes entirely store managed 
+        - Update 'ParticipantStore' interface so methods like 'ClaimLeader' utilize active internal session state, not requiring a session arg.
+        - Bridge session lease expiry ('sess.Done()') inside adapter to emit a 'SessionExpiredEvent' over the event stream, adding a member to models/events.go to represent the event.
 
 IV. Recently implemented:
 

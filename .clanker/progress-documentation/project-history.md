@@ -205,3 +205,10 @@ XLIII: Context Naming Conventions and Propagation Standardization Across Core
     - Standardized request-scoped context naming to req_ctx across RPCHandler methods (HandleInit, HandleAssimilate, HandleActivate, HandleGetLogs).
     - Refactored RPCHandler background goroutine triggers to ensure app_ctx is passed for long-lived runtime lifetimes instead of request-scoped contexts.
     - Updated StoreAdapter interface and implementations so etcd.RemoveMember manages context internally, eliminating redundant context parameters from caller sites in Recruiter.
+
+XLIV: Implement Sealed Interface Pattern and Tick-Bound Cancellation for Leader Event Loop
+    - Generalized reconcile tick event models into a common TickEvent struct carrying context and cancellation function.
+    - Added unexported marker interface method to LeaderEvent interface to form a sealed interface hierarchy.
+    - Updated LeaderRole event loop and handleEvent helper to process sealed LeaderEvent types using type switching.
+    - Implemented concurrency control in LeaderRole using an atomic inFlight boolean flag to drop overlapping ticks and execute cancellation guards.
+    - Refactored Recruiter handleEvent type switch to align with the generalized TickEvent model.

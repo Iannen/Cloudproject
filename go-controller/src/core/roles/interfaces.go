@@ -32,9 +32,10 @@ type ParticipantStore interface {
 	NodeAssignments(ctx context.Context, nodeID string) ([]string, int64, error)
 	AssignmentDef(ctx context.Context, assignmentID string) (*models.Assignment, error)
 	CreateAssignment(ctx context.Context, a models.Assignment) error
-	NewSession(ctx context.Context) (models.Session, error)
-	PutWithSession(ctx context.Context, sess models.Session, nodeID string, value string) error
-	ClaimLeader(ctx context.Context, sess models.Session, nodeID string) (bool, error)
+	EnsureSession(ctx context.Context) error
+	CloseSession() error
+	PutHeartbeat(ctx context.Context, nodeID string, value string) error
+	ClaimLeader(ctx context.Context, nodeID string) (bool, error)
 	SubscribeEvents(ctx context.Context, nodeID string) (<-chan models.Event, error)
 	Connect(ctx context.Context) error
 }

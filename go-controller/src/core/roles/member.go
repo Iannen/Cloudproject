@@ -45,8 +45,7 @@ func (m *MemberRole) Run(ctx context.Context) {
 			return
 		}
 
-		sess, err := m.store.NewSession(ctx)
-		if err != nil {
+		if err := m.store.EnsureSession(ctx); err != nil {
 			log.Printf("[Member] Failed to establish session: %v", err)
 			m.registry.StopManagedAssignments()
 			if ctx.Err() != nil {
@@ -55,9 +54,9 @@ func (m *MemberRole) Run(ctx context.Context) {
 			continue
 		}
 
-		if err := m.store.PutWithSession(ctx, sess, nodeID, "alive"); err != nil {
+		if err := m.store.PutHeartbeat(ctx, nodeID, "alive"); err != nil {
 			log.Printf("[Member] Failed to register heartbeat presence: %v", err)
-			_ = sess.Close()
+			_ = m.store.CloseSession()
 			m.registry.StopManagedAssignments()
 			if ctx.Err() != nil {
 				return
@@ -65,19 +64,19 @@ func (m *MemberRole) Run(ctx context.Context) {
 			continue
 		}
 
-		if err := m.runSession(ctx, sess); err != nil {
+		m.tryClaimLeadership(ctx)
+		m.reconcile(ctx)
+
+		if err := m.runSession(ctx); err != nil {
 			log.Printf("[Member] Session terminated: %v", err)
 		}
 
-		_ = sess.Close()
+		_ = m.store.CloseSession()
 		m.registry.StopManagedAssignments()
 	}
 }
 
-func (m *MemberRole) runSession(sCtx context.Context, sess models.Session) error {
-	m.tryClaimLeadership(sCtx, sess)
-	m.reconcile(sCtx)
-
+func (m *MemberRole) runSession(sCtx context.Context) error {
 	ch, err := m.store.SubscribeEvents(sCtx, m.asg.NodeID)
 	if err != nil {
 		return err
@@ -88,30 +87,35 @@ func (m *MemberRole) runSession(sCtx context.Context, sess models.Session) error
 		case <-sCtx.Done():
 			return sCtx.Err()
 
-		case <-sess.Done():
-			return errors.New("session lease expired")
-
 		case ev, ok := <-ch:
 			if !ok {
 				return nil
 			}
 
-			switch ev.Type {
-			case models.EventLeaderDeleted:
-				m.tryClaimLeadership(sCtx, sess)
-
-			case models.EventAssignmentChange, models.EventReconcileTick:
-				m.reconcile(sCtx)
-
-			default:
-				log.Printf("[Member] Unhandled event type: %s", ev.Type)
+			if ev.Type == models.EventSessionExpired {
+				return errors.New("session lease expired")
 			}
+
+			m.handleEvent(sCtx, ev)
 		}
 	}
 }
 
-func (m *MemberRole) tryClaimLeadership(ctx context.Context, sess models.Session) {
-	isLeader, err := m.store.ClaimLeader(ctx, sess, m.asg.NodeID)
+func (m *MemberRole) handleEvent(ctx context.Context, ev models.Event) {
+	switch ev.Type {
+	case models.EventLeaderDeleted:
+		m.tryClaimLeadership(ctx)
+
+	case models.EventAssignmentChange, models.EventReconcileTick:
+		m.reconcile(ctx)
+
+	default:
+		log.Printf("[Member] Unhandled event type: %s", ev.Type)
+	}
+}
+
+func (m *MemberRole) tryClaimLeadership(ctx context.Context) {
+	isLeader, err := m.store.ClaimLeader(ctx, m.asg.NodeID)
 	if err != nil {
 		log.Printf("[Member] Leadership claim attempt error: %v", err)
 		return
