@@ -24,6 +24,20 @@ func (e *etcdSession) Close() error {
 	return e.sess.Close()
 }
 
+func NewTickEvent(ctx context.Context, cancel context.CancelFunc) models.Event {
+	return models.Event{
+		Type:   models.EventReconcileTick,
+		Ctx:    ctx,
+		Cancel: cancel,
+	}
+}
+
+func NewEvent(typ models.EventType) models.Event {
+	return models.Event{
+		Type: typ,
+	}
+}
+
 type StoreConfig struct {
 	NodeID              string
 	Endpoint            string
@@ -258,7 +272,7 @@ func (s *Store) SubscribeRecruiterEvents(ctx context.Context) (<-chan models.Eve
 				return
 			case <-tk.C:
 				tickCtx, tickCancel := context.WithTimeout(ctx, s.cfg.TickTimeout)
-				ev := models.NewTickEvent(tickCtx, tickCancel)
+				ev := NewTickEvent(tickCtx, tickCancel)
 				select {
 				case ch <- ev:
 				default:
