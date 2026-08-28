@@ -24,7 +24,6 @@ func (t *Recruiter) Run(ctx context.Context) {
 		log.Printf("[TSMgr] Failed to subscribe to recruiter events: %v", err)
 		return
 	}
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -33,32 +32,29 @@ func (t *Recruiter) Run(ctx context.Context) {
 			if !ok {
 				return
 			}
-
-			switch ev.Type {
-			case models.EventReconcileTick:
-				if !t.inFlight.CompareAndSwap(false, true) {
-					ev.Cancel()
-					continue
-				}
-
-				go func(e models.Event) {
-					defer e.Cancel()
-					defer t.inFlight.Store(false)
-
-					execCtx := e.Ctx
-					if execCtx == nil {
-						execCtx = ctx
-					}
-
-					if err := t.reconcile(execCtx); err != nil {
-						log.Println(err)
-					}
-				}(ev)
-
-			default:
-				ev.Cancel()
-			}
+			t.handleEvent(ev)
 		}
+	}
+}
+
+func (t *Recruiter) handleEvent(ev models.Event) {
+	switch ev.Type {
+	case models.EventReconcileTick:
+		if !t.inFlight.CompareAndSwap(false, true) {
+			ev.Cancel()
+			return
+		}
+
+		go func(e models.Event) {
+			defer e.Cancel()
+			defer t.inFlight.Store(false)
+
+			if err := t.reconcile(e.Ctx); err != nil {
+				log.Println(err)
+			}
+		}(ev)
+	default:
+		ev.Cancel()
 	}
 }
 
