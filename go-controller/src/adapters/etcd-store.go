@@ -38,6 +38,7 @@ type StoreConfig struct {
 	PrefixHeartbeats    string
 	PrefixDefs          string
 	PrefixNodeAsgs      string
+	TickTimeout         time.Duration
 }
 
 type Store struct {
@@ -256,9 +257,12 @@ func (s *Store) SubscribeRecruiterEvents(ctx context.Context) (<-chan models.Eve
 			case <-ctx.Done():
 				return
 			case <-tk.C:
+				tickCtx, tickCancel := context.WithTimeout(ctx, s.cfg.TickTimeout)
+				ev := models.NewTickEvent(tickCtx, tickCancel)
 				select {
-				case ch <- models.Event{Type: models.EventReconcileTick}:
+				case ch <- ev:
 				default:
+					ev.Cancel()
 				}
 			}
 		}

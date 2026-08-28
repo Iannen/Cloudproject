@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 	"sync/atomic"
+	"time"
 )
 
 type Recruiter struct {
@@ -24,7 +25,24 @@ func (t *Recruiter) Run(ctx context.Context) {
 		log.Printf("[TSMgr] Failed to subscribe to recruiter events: %v", err)
 		return
 	}
-
+	/*
+		//the old implementation - does not use a swith. runs the reconcile sequentially.
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case _, ok := <-ch:
+				if !ok {
+					return
+				}
+				if err := t.reconcile(ctx, t.asg.NodeID); err != nil {
+					log.Println(err)
+				}
+			}
+		}
+	*/
+	//	the latest working iteration - now has a switch (which all reconcilers will use for eventhandling in the future), and spawns a goroutine for the purpose of the reconcile call
+	// uses an atomic bool for reconcile execute lc management, but inlines the ctx creation with magic 45s var.
 	for {
 		select {
 		case <-ctx.Done():
@@ -33,34 +51,57 @@ func (t *Recruiter) Run(ctx context.Context) {
 			if !ok {
 				return
 			}
-
 			switch ev.Type {
+
 			case models.EventReconcileTick:
-				if !t.inFlight.CompareAndSwap(false, true) {
-					ev.Cancel()
-					continue
+				if t.inFlight.CompareAndSwap(false, true) {
+					go func() {
+						defer t.inFlight.Store(false)
+						recCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+						defer cancel()
+
+						if err := t.reconcile(recCtx); err != nil { // .. (ev.ctx) ..
+							log.Println(err)
+						}
+					}()
 				}
-
-				go func(e models.Event) {
-					defer e.Cancel()
-					defer t.inFlight.Store(false)
-
-					execCtx := e.Ctx
-					if execCtx == nil {
-						execCtx = ctx
-					}
-
-					if err := t.reconcile(execCtx); err != nil {
-						log.Println(err)
-					}
-				}(ev)
-
-			default:
-				ev.Cancel()
 			}
 		}
 	}
 }
+
+/*
+	//The next iteration. which seeks to make the tickevent the owner of the ctx and the cancelfunc, which in my mind aligns with doctrine of pushing stuff behind adapter boundary.
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev, ok := <-ch:
+			if !ok {
+				return
+			}
+			switch ev.Type {
+				case models.EventReconcileTick:
+					if !t.inFlight.CompareAndSwap(false, true) {
+						ev.Cancel()
+						continue
+					}
+
+					go func(reqCtx context.Context, cancel context.CancelFunc) {
+						defer t.inFlight.Store(false)
+						defer cancel()
+
+						if err := t.reconcile(reqCtx); err != nil {
+							log.Println(err)
+						}
+					}(ev.Ctx, ev.Cancel)
+
+				default:
+					log.Printf("[TSMgr] Unhandled event type: %s", ev.Type)
+				}
+		}
+	}
+*/
 
 func (t *Recruiter) peerURL(ip string) string {
 	return fmt.Sprintf("http://%s:2380", ip)

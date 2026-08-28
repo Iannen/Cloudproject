@@ -54,6 +54,7 @@ func main() {
 		PrefixHeartbeats:    "heartbeats/nodes/",
 		PrefixDefs:          "assignments/definitions/",
 		PrefixNodeAsgs:      "assignments/nodes/",
+		TickTimeout:         45 * time.Second,
 	})
 	httpSrv := adapters.NewHTTPServerAdapter(adapters.HTTPServerConfig{
 		Addr:          ":8080",
