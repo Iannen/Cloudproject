@@ -20,9 +20,14 @@ type RecruiterEvent interface {
 	isRecruiterEvent()
 }
 
-type RecruiterTickEvent struct {
+type LeaderEvent interface {
+	isLeaderEvent()
+}
+
+type TickEvent struct {
 	Ctx    context.Context
 	Cancel context.CancelFunc
 }
 
-func (RecruiterTickEvent) isRecruiterEvent() {}
+func (TickEvent) isRecruiterEvent() {}
+func (TickEvent) isLeaderEvent()    {}

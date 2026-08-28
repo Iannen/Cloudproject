@@ -16,9 +16,28 @@ II. Items to refine & QC:
             a. Detect and evict dead/unresponsive members to clear etcd "unhealthy cluster" blocks
             b. Refetch/update state and evaluate remaining capacity to recruit new online Tailscale peers
 
-III. Purported actionable items:
+III. Slated for implementation:
 
-IV. Slated for implementation:
+[x] Implement a Sealed Interface pattern and tick-bound cancellation for LeaderRole event stream
+    [x] 'go-controller/src/core/models/events.go': Generalize tick event and add Leader marker interface
+        - Rename 'RecruiterTickEvent' to 'TickEvent' carrying 'Ctx context.Context' and 'Cancel context.CancelFunc'
+        - Define unexported marker interface 'LeaderEvent'
+        - Update 'RecruiterEvent' and 'LeaderEvent' interfaces to both be satisfied by 'TickEvent'
+        - Define additional 'LeaderEvent' concrete implementations as needed (e.g., 'LeaderChangeEvent')
+    [x] 'go-controller/src/core/roles/interfaces.go' & 'go-controller/src/adapters/etcd-store.go': Update Leader event subscription
+        - Update 'SubscribeLeaderEvents' store port and adapter signature to return '<-chan models.LeaderEvent'
+        - Update adapter implementation to emit sealed Leader events
+        - Derive tick-bound context using store config timeout and implement channel drop cancellation guards to prevent context leaks
+    [x] 'go-controller/src/core/roles/leader.go': Refactor LeaderRole event loop and add handleEvent helper
+        - Add 'inFlight atomic.Bool' field to 'LeaderRole' struct
+        - Refactor 'LeaderRole.Run' loop to pass incoming 'models.LeaderEvent' directly to a new 't.handleEvent(ev)' helper method
+        - Implement 'handleEvent(ev models.LeaderEvent)' using a Go type switch ('switch e := ev.(type)')
+        - Use 'l.inFlight.CompareAndSwap(false, true)' guard on tick events, invoking 'e.Cancel()' on drop
+        - Spawn 'l.reconcile' in a background goroutine passing 'e.Ctx', deferring 'e.Cancel()' and 'l.inFlight.Store(false)'
+    [x] 'go-controller/src/core/roles/recruiter.go': Update Recruiter references to generalized TickEvent
+        - Update 'Recruiter.handleEvent' type switch to match against 'models.TickEvent'
+
+IV. Recently implemented:
 
 [x] Implement tick-bound cancellation and asynchronous execution for Recruiter reconciliation
     [x] 'go-controller/src/core/roles/recruiter.go': Refactor Recruiter.Run to consume event-owned context and cancellation
@@ -55,7 +74,5 @@ IV. Slated for implementation:
         - [x] Update only the `SubscribeRecruiterEvents` store port and adapter signature to return `<-chan models.RecruiterEvent` (leave Leader/Member subscription methods untouched).
         - [x] Align the adapter implementation logic to serve the refactored event handling.
         - [x] Refactor `Recruiter.handleEvent` to use a Go type switch (`switch e := ev.(type)`).
-        
-V. Recently implemented:
 
-VI. Bugs:
+V. Bugs:

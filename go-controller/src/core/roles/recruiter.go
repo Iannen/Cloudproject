@@ -39,7 +39,7 @@ func (t *Recruiter) Run(ctx context.Context) {
 
 func (t *Recruiter) handleEvent(ev models.RecruiterEvent) {
 	switch e := ev.(type) {
-	case models.RecruiterTickEvent:
+	case models.TickEvent:
 		if !t.inFlight.CompareAndSwap(false, true) {
 			if e.Cancel != nil {
 				e.Cancel()
@@ -47,7 +47,7 @@ func (t *Recruiter) handleEvent(ev models.RecruiterEvent) {
 			return
 		}
 
-		go func(te models.RecruiterTickEvent) {
+		go func(te models.TickEvent) {
 			if te.Cancel != nil {
 				defer te.Cancel()
 			}

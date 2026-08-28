@@ -6,11 +6,13 @@ import (
 	"go-controller/src/core/config"
 	"go-controller/src/core/models"
 	"log"
+	"sync/atomic"
 )
 
 type LeaderRole struct {
-	asg   models.Assignment
-	store AssignmentStore
+	asg      models.Assignment
+	store    AssignmentStore
+	inFlight atomic.Bool
 }
 
 func (l *LeaderRole) Run(ctx context.Context) {
@@ -25,14 +27,35 @@ func (l *LeaderRole) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case _, ok := <-ch:
+		case ev, ok := <-ch:
 			if !ok {
 				return
 			}
-			if err := l.reconcile(ctx); err != nil {
+			l.handleEvent(ev)
+		}
+	}
+}
+
+func (l *LeaderRole) handleEvent(ev models.LeaderEvent) {
+	switch e := ev.(type) {
+	case models.TickEvent:
+		if !l.inFlight.CompareAndSwap(false, true) {
+			if e.Cancel != nil {
+				e.Cancel()
+			}
+			return
+		}
+
+		go func(te models.TickEvent) {
+			if te.Cancel != nil {
+				defer te.Cancel()
+			}
+			defer l.inFlight.Store(false)
+
+			if err := l.reconcile(te.Ctx); err != nil {
 				log.Println(err)
 			}
-		}
+		}(e)
 	}
 }
 

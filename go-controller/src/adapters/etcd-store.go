@@ -233,8 +233,8 @@ func (s *Store) SubscribeEvents(ctx context.Context, nodeID string) (<-chan mode
 	return ch, nil
 }
 
-func (s *Store) SubscribeLeaderEvents(ctx context.Context) (<-chan models.Event, error) {
-	ch := make(chan models.Event, 10)
+func (s *Store) SubscribeLeaderEvents(ctx context.Context) (<-chan models.LeaderEvent, error) {
+	ch := make(chan models.LeaderEvent, 10)
 	go func() {
 		tk := time.NewTicker(s.cfg.ReconcileInterval)
 		defer tk.Stop()
@@ -243,9 +243,17 @@ func (s *Store) SubscribeLeaderEvents(ctx context.Context) (<-chan models.Event,
 			case <-ctx.Done():
 				return
 			case <-tk.C:
+				tickCtx, tickCancel := context.WithTimeout(ctx, s.cfg.TickTimeout)
+				ev := models.TickEvent{
+					Ctx:    tickCtx,
+					Cancel: tickCancel,
+				}
 				select {
-				case ch <- models.Event{Type: models.EventReconcileTick}:
+				case ch <- ev:
 				default:
+					if ev.Cancel != nil {
+						ev.Cancel()
+					}
 				}
 			}
 		}
@@ -264,7 +272,7 @@ func (s *Store) SubscribeRecruiterEvents(ctx context.Context) (<-chan models.Rec
 				return
 			case <-tk.C:
 				tickCtx, tickCancel := context.WithTimeout(ctx, s.cfg.TickTimeout)
-				ev := models.RecruiterTickEvent{
+				ev := models.TickEvent{
 					Ctx:    tickCtx,
 					Cancel: tickCancel,
 				}

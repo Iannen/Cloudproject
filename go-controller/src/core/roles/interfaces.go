@@ -25,7 +25,7 @@ type AssignmentStore interface {
 	GetActiveNodeIDs(ctx context.Context) ([]string, error)
 	GetAllAssignments(ctx context.Context) ([]models.Assignment, error)
 	CreateAssignment(ctx context.Context, a models.Assignment) error
-	SubscribeLeaderEvents(ctx context.Context) (<-chan models.Event, error)
+	SubscribeLeaderEvents(ctx context.Context) (<-chan models.LeaderEvent, error)
 }
 
 type ParticipantStore interface {
