@@ -199,3 +199,9 @@ XLI: Tailscale Peer Filtering Delegation to Adapter
 XLII: Idiomatic Composition Root Refactoring in Main
     - Replaced manual OS signal channel handling with context propagation via signal.NotifyContext.
     - Restructured the graceful shutdown sequence in main to halt the HTTP server prior to tearing down Registry runtimes.
+
+XLIII: Context Naming Conventions and Propagation Standardization Across Core
+    - Standardized logical application context naming to app_ctx in main.go, registry, and RPCHandler constructors.
+    - Standardized request-scoped context naming to req_ctx across RPCHandler methods (HandleInit, HandleAssimilate, HandleActivate, HandleGetLogs).
+    - Refactored RPCHandler background goroutine triggers to ensure app_ctx is passed for long-lived runtime lifetimes instead of request-scoped contexts.
+    - Updated StoreAdapter interface and implementations so etcd.RemoveMember manages context internally, eliminating redundant context parameters from caller sites in Recruiter.

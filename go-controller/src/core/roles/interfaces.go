@@ -61,7 +61,7 @@ type ClusterMgr interface {
 	AddLearner(ctx context.Context, peerURL string) (*models.MemberInfo, []models.MemberInfo, error)
 	PromoteMember(ctx context.Context, memberID uint64) error
 	RemoveMember(memberID uint64) error
-	SubscribeRecruiterEvents(ctx context.Context) (<-chan models.Event, error)
+	SubscribeRecruiterEvents(ctx context.Context) (<-chan models.RecruiterEvent, error)
 }
 
 type TSClient interface {

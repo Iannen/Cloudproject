@@ -37,24 +37,26 @@ func (t *Recruiter) Run(ctx context.Context) {
 	}
 }
 
-func (t *Recruiter) handleEvent(ev models.Event) {
-	switch ev.Type {
-	case models.EventReconcileTick:
+func (t *Recruiter) handleEvent(ev models.RecruiterEvent) {
+	switch e := ev.(type) {
+	case models.RecruiterTickEvent:
 		if !t.inFlight.CompareAndSwap(false, true) {
-			ev.Cancel()
+			if e.Cancel != nil {
+				e.Cancel()
+			}
 			return
 		}
 
-		go func(e models.Event) {
-			defer e.Cancel()
+		go func(te models.RecruiterTickEvent) {
+			if te.Cancel != nil {
+				defer te.Cancel()
+			}
 			defer t.inFlight.Store(false)
 
-			if err := t.reconcile(e.Ctx); err != nil {
+			if err := t.reconcile(te.Ctx); err != nil {
 				log.Println(err)
 			}
-		}(ev)
-	default:
-		ev.Cancel()
+		}(e)
 	}
 }
 

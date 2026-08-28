@@ -15,3 +15,14 @@ type Event struct {
 	Ctx    context.Context
 	Cancel context.CancelFunc
 }
+
+type RecruiterEvent interface {
+	isRecruiterEvent()
+}
+
+type RecruiterTickEvent struct {
+	Ctx    context.Context
+	Cancel context.CancelFunc
+}
+
+func (RecruiterTickEvent) isRecruiterEvent() {}

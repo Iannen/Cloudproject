@@ -24,14 +24,6 @@ func (e *etcdSession) Close() error {
 	return e.sess.Close()
 }
 
-func NewTickEvent(ctx context.Context, cancel context.CancelFunc) models.Event {
-	return models.Event{
-		Type:   models.EventReconcileTick,
-		Ctx:    ctx,
-		Cancel: cancel,
-	}
-}
-
 func NewEvent(typ models.EventType) models.Event {
 	return models.Event{
 		Type: typ,
@@ -261,8 +253,8 @@ func (s *Store) SubscribeLeaderEvents(ctx context.Context) (<-chan models.Event,
 	return ch, nil
 }
 
-func (s *Store) SubscribeRecruiterEvents(ctx context.Context) (<-chan models.Event, error) {
-	ch := make(chan models.Event, 10)
+func (s *Store) SubscribeRecruiterEvents(ctx context.Context) (<-chan models.RecruiterEvent, error) {
+	ch := make(chan models.RecruiterEvent, 10)
 	go func() {
 		tk := time.NewTicker(s.cfg.ReconcileInterval)
 		defer tk.Stop()
@@ -272,11 +264,16 @@ func (s *Store) SubscribeRecruiterEvents(ctx context.Context) (<-chan models.Eve
 				return
 			case <-tk.C:
 				tickCtx, tickCancel := context.WithTimeout(ctx, s.cfg.TickTimeout)
-				ev := NewTickEvent(tickCtx, tickCancel)
+				ev := models.RecruiterTickEvent{
+					Ctx:    tickCtx,
+					Cancel: tickCancel,
+				}
 				select {
 				case ch <- ev:
 				default:
-					ev.Cancel()
+					if ev.Cancel != nil {
+						ev.Cancel()
+					}
 				}
 			}
 		}
