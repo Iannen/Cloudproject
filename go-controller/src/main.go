@@ -27,7 +27,7 @@ func main() {
 
 	nodeID := osa.GetNodeID()
 
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	app_ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
 	docker := adapters.NewDockerAdapter(adapters.DockerConfig{
@@ -74,7 +74,7 @@ func main() {
 	})
 
 	reg := registry.NewRegistry(
-		ctx,
+		app_ctx,
 		etcd,
 		httpCli,
 		ts,
@@ -83,7 +83,7 @@ func main() {
 	memberAsg := roles.NewMemberAssignment(nodeID)
 	memberRole := roles.NewMemberRole(memberAsg, etcd, reg)
 
-	rpcHandler := roles.NewRPCHandler(ctx, memberRole, docker, osa)
+	rpcHandler := roles.NewRPCHandler(app_ctx, memberRole, docker, osa)
 	adapters.RegisterGet(httpSrv, "/initialize", rpcHandler.HandleInit)
 	adapters.RegisterGet(httpSrv, "/logs", rpcHandler.HandleGetLogs)
 	adapters.RegisterGet(httpSrv, "/activate", rpcHandler.HandleActivate)
@@ -95,7 +95,7 @@ func main() {
 	select {
 	case err := <-errCh:
 		log.Printf("[Main] HTTP server error: %v", err)
-	case <-ctx.Done():
+	case <-app_ctx.Done():
 		log.Println("[Main] Shutting down node...")
 	}
 

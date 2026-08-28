@@ -399,7 +399,9 @@ func (s *Store) PromoteMember(ctx context.Context, id uint64) error {
 	return err
 }
 
-func (s *Store) RemoveMember(ctx context.Context, id uint64) error {
+func (s *Store) RemoveMember(id uint64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), s.cfg.Timeout)
+	defer cancel()
 	_, err := s.cli.MemberRemove(ctx, id)
 	return err
 }

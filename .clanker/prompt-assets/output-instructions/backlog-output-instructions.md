@@ -3,8 +3,9 @@ Return items inside a plain text code block (` ```text `)
 Format:
 
 [ ] Appropriately descriptive header sentence 
-    [ ] Appropriately descriptive sub task header sentence 
-        - optional bullet 1
-    [ ] Appropriately descriptive sub task header sentence 
-        - optional bullet 1
-        - optional bullet 2
+    [ ] 'file1.path': Brief content change synopsis
+        - task / prohibition / other info 1
+        - task / prohibition / other info 2
+    [ ] 'file1.path': Brief content change synopsis
+        - task / prohibition / other info 1
+        ..

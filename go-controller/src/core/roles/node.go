@@ -16,7 +16,7 @@ type RPCHandler struct {
 	started    bool
 }
 
-func (h *RPCHandler) HandleInit(ctx context.Context) (string, error) {
+func (h *RPCHandler) HandleInit(req_ctx context.Context) (string, error) {
 	id := h.osa.GetNodeID()
 
 	h.mu.Lock()
@@ -26,57 +26,57 @@ func (h *RPCHandler) HandleInit(ctx context.Context) (string, error) {
 	}
 	h.mu.Unlock()
 
-	_ = h.dcr.ResetEtcd(ctx)
-	if err := h.dcr.StartEtcd(ctx); err != nil {
+	_ = h.dcr.ResetEtcd(req_ctx)
+	if err := h.dcr.StartEtcd(req_ctx); err != nil {
 		return "", fmt.Errorf("etcd start failed: %w", err)
 	}
 
-	if err := h.dcr.WaitEtcdReady(ctx); err != nil {
+	if err := h.dcr.WaitEtcdReady(req_ctx); err != nil {
 		return "", fmt.Errorf("etcd ready check failed: %w", err)
 	}
 
-	if err := h.activateMember(ctx); err != nil {
+	if err := h.activateMember(); err != nil {
 		return "", err
 	}
 
 	return fmt.Sprintf("Node %s initialized.\n", id), nil
 }
 
-func (h *RPCHandler) HandleAssimilate(ctx context.Context, p models.AssimilatePayload) (string, error) {
-	if err := h.osa.WriteEnvConfig(ctx, p); err != nil {
+func (h *RPCHandler) HandleAssimilate(req_ctx context.Context, p models.AssimilatePayload) (string, error) {
+	if err := h.osa.WriteEnvConfig(req_ctx, p); err != nil {
 		return "", fmt.Errorf("config write failed: %w", err)
 	}
 
-	_ = h.dcr.ResetEtcd(ctx)
-	if err := h.dcr.StartEtcd(ctx); err != nil {
+	_ = h.dcr.ResetEtcd(req_ctx)
+	if err := h.dcr.StartEtcd(req_ctx); err != nil {
 		return "", fmt.Errorf("etcd start failed: %w", err)
 	}
 
-	if err := h.dcr.WaitEtcdReady(ctx); err != nil {
-		if ctx.Err() != nil {
-			return "", fmt.Errorf("timeout: %w", ctx.Err())
+	if err := h.dcr.WaitEtcdReady(req_ctx); err != nil {
+		if req_ctx.Err() != nil {
+			return "", fmt.Errorf("timeout: %w", req_ctx.Err())
 		}
 		return "", fmt.Errorf("etcd socket timeout: %w", err)
 	}
 	return "Learner ready.\n", nil
 }
 
-func (h *RPCHandler) HandleActivate(ctx context.Context) (string, error) {
-	if err := h.activateMember(ctx); err != nil {
+func (h *RPCHandler) HandleActivate(req_ctx context.Context) (string, error) {
+	if err := h.activateMember(); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("Node %s activated.\n", h.osa.GetNodeID()), nil
 }
 
-func (h *RPCHandler) HandleGetLogs(ctx context.Context) (string, error) {
-	logs, err := h.dcr.GetLogs(ctx, "controller")
+func (h *RPCHandler) HandleGetLogs(req_ctx context.Context) (string, error) {
+	logs, err := h.dcr.GetLogs(req_ctx, "controller")
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch container logs: %w", err)
 	}
 	return logs, nil
 }
 
-func (h *RPCHandler) activateMember(_ context.Context) error {
+func (h *RPCHandler) activateMember() error {
 	h.mu.Lock()
 	if h.started {
 		h.mu.Unlock()

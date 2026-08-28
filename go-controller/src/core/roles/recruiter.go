@@ -83,7 +83,7 @@ func (t *Recruiter) recruit(ctx context.Context, nodeID string, p models.TSPeer)
 	lid := l.ID
 	defer func() {
 		if lid != 0 {
-			_ = t.str.RemoveMember(context.Background(), lid)
+			_ = t.str.RemoveMember(lid)
 		}
 	}()
 

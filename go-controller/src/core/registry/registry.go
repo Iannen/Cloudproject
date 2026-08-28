@@ -147,10 +147,10 @@ func NewAssignmentRuntime(asg models.Assignment) *AssignmentRuntime {
 }
 
 func (r *AssignmentRuntime) Start(
-	parentCtx context.Context,
+	app_ctx context.Context,
 	runner RoleRunner,
 ) {
-	ctx, cancel := context.WithCancel(parentCtx)
+	ctx, cancel := context.WithCancel(app_ctx)
 	r.CancelFunc = cancel
 
 	r.wg.Add(1)
