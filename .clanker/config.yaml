@@ -29,13 +29,13 @@ domains:
   renders:
   - name: plan
     resolvers:
-    - {id: prompt_fragments, type: multi-document-retrieval, files: [plan-mode.md, backlog-output-instructions.md]}
+    - { id: "prompt_fragments", type: "multi-document-retrieval", files: [plan-mode.md, backlog-output-instructions.md] }
   - name: execute
     resolvers:
     - {id: prompt_fragments, type: multi-document-retrieval, files: [do-mode.md, code-output-instruction.md]}
   - name: doc-mgm
     resolvers:
-    - {id: prompt_fragments, type: multi-document-retrieval, files: [doc-mgmnt.md, {"file": "project-history.md", "tail_lines": 8}, history-output-instructions.md]}
+    - {id: prompt_fragments, type: multi-document-retrieval, files: [doc-management-mode.md, {"file": "project-history.md", "tail_lines": 8}, history-output-instructions.md]}
 
 - name: c-adapters
   resolvers:

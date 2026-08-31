@@ -25,3 +25,8 @@ It handles automated VM provisioning via Cloud-Init, wires nodes together using 
 
 # 3. Provision a new node
 ./vms.sh create-vm node-01 <TEMPLATE_VMID>
+```
+### IV: Project status:
+31.08.26 
+One push to implement remainder of backlog will leave the system in a state where it handles node death & can recruit new tailnet members
+(at least inside the proxmox vm environment, but it should translate to nodes outside of that as well)
