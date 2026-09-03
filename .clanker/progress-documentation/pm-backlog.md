@@ -5,9 +5,12 @@ I. Long term goals
 
 II. Medium term goals
       - make it so that template does not rm the downloaded img
+      - fix hardcoded user / pass credentials & unify with the two ts credential tokens
+            - move out to env vars
 
 III. Immediate goals
       - tidy it up to save tokens
+
 
 IV. Idea bucket:
 
